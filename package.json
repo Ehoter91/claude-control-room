@@ -1,0 +1,70 @@
+{
+  "name": "claude-control-room",
+  "productName": "Control Room",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A macOS control room for your live Claude Code sessions",
+  "main": "electron/main.mjs",
+  "scripts": {
+    "dev:server": "node --watch server/main.ts",
+    "dev:web": "vite",
+    "build:web": "vite build",
+    "build:server": "esbuild server/main.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/server.mjs",
+    "build:demo": "esbuild server/demo.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/demo.mjs",
+    "build:vsix": "node scripts/build-vsix.mjs",
+    "build": "npm run build:web && npm run build:server && npm run build:vsix",
+    "start": "node dist/server.mjs",
+    "demo": "npm run build:web && npm run build:demo && node dist/demo.mjs",
+    "app": "npm run build && electron .",
+    "app:only": "electron .",
+    "package": "npm run build && electron-builder --mac --dir",
+    "screenshots": "npm run build:web && npm run build:demo && electron scripts/screenshots.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "45.2.1",
+    "electron-builder": "26.0.20",
+    "esbuild": "0.25.12",
+    "lucide-react": "0.577.0",
+    "motion": "12.43.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "3.2.7"
+  },
+  "build": {
+    "appId": "local.claude.control-room",
+    "productName": "Control Room",
+    "directories": {
+      "output": "release"
+    },
+    "asar": false,
+    "files": [
+      "electron/**",
+      "dist/**",
+      "!dist/demo.mjs",
+      "build/icon.png",
+      "build/trayTemplate*.png",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
+      "target": [
+        "dir"
+      ],
+      "identity": "-",
+      "extendInfo": {
+        "LSUIElement": true
+      }
+    }
+  }
+}

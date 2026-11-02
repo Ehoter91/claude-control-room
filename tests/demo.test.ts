@@ -1,0 +1,62 @@
+// The demo feeds the README screenshots and `npm run demo`: it must stay true to the live rules and touch nothing.
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Snapshot } from "../shared/types.ts";
+import { demoClosePlan, DEMO_MAX_COUNT, demoSnapshot, demoWorktrees } from "../server/demo-data.ts";
+import { startDemo, type DemoRunning } from "../server/demo.ts";
+
+const NOW = 1_800_000_000_000;
+
+describe("demo data", () => {
+  it("shows every status a tile can show, newest session first", () => {
+    const snap = demoSnapshot(NOW, DEMO_MAX_COUNT);
+    const kinds = new Set(snap.sessions.map((s) => s.activity.kind));
+    for (const kind of ["working", "approval", "question", "background", "idle", "inactive"]) expect(kinds).toContain(kind);
+    expect(snap.sessions.some((s) => s.activity.askedYou)).toBe(true);
+    expect(snap.sessions.map((s) => s.startedAt)).toEqual([...snap.sessions.map((s) => s.startedAt)].sort((a, b) => b - a));
+    expect(new Set(snap.sessions.map((s) => s.pid)).size).toBe(snap.sessions.length);
+  });
+
+  it("uses made-up places only", () => {
+    const snap = demoSnapshot(NOW, DEMO_MAX_COUNT);
+    for (const s of snap.sessions) expect(s.cwd.startsWith("/Users/you/code/")).toBe(true);
+    expect(snap.account.email).toBe("you@example.com");
+  });
+
+  it("gives the advice the live app would give", () => {
+    const snap = demoSnapshot(NOW);
+    const merged = snap.sessions.find((s) => s.pr?.state === "MERGED")!;
+    expect(demoClosePlan(merged, snap.sessions, NOW).worktree?.verdict).toBe("safe");
+    const repo = snap.sessions[0].git!.mainRoot;
+    const verdicts = demoWorktrees(repo, snap.sessions, NOW).map((r) => r.verdict);
+    for (const v of ["main", "in-use", "safe", "probably-safe", "keep", "gone"]) expect(verdicts).toContain(v);
+  });
+});
+
+describe("demo server", () => {
+  let demo: DemoRunning;
+  const post = (path: string, body: unknown = {}, headers: Record<string, string> = { "X-Control-Room": "1" }) =>
+    fetch(`${demo.url}${path.slice(1)}`, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
+  const snapshot = async () => (await (await fetch(`${demo.url}api/snapshot`)).json()) as Snapshot;
+
+  beforeAll(async () => {
+    demo = await startDemo({ port: 0 });
+  });
+  afterAll(() => demo.stop());
+
+  it("moves a session along when you approve or answer", async () => {
+    const before = await snapshot();
+    const asking = before.sessions.find((s) => s.activity.kind === "approval")!;
+    expect((await (await post(`/api/sessions/${asking.pid}/approve`)).json()).ok).toBe(true);
+    const after = await snapshot();
+    expect(after.sessions.find((s) => s.pid === asking.pid)?.activity.kind).toBe("working");
+
+    const question = after.sessions.find((s) => s.activity.kind === "question")!;
+    const answer = await (await post(`/api/sessions/${question.pid}/answer`, { option: 0 })).json();
+    expect(answer.message).toContain(question.activity.question!.options[0].label);
+  });
+
+  it("keeps the live server's guards", async () => {
+    expect((await post("/api/power", { on: false }, {})).status).toBe(403);
+    expect((await fetch(`${demo.url}api/snapshot`, { headers: { Origin: "https://example.com" } })).status).toBe(403);
+  });
+});
