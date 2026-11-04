@@ -13,6 +13,7 @@ import { HOOK_BODY, tapScript, withConnection, withoutConnection } from "../serv
 import { HOOK_SCRIPT, TAP_SCRIPT } from "../server/paths.ts";
 import { applyLines, describeTool, emptyState, modelName, userText } from "../server/transcript.ts";
 import { verdictFor, type WorktreeFacts } from "../server/worktrees.ts";
+import { isEffort, isMode, isModel, modeName, modelAlias } from "../shared/claude.ts";
 import { isIdeId, openTarget, targetName } from "../shared/ides.ts";
 import { fitWall, TILE_MIN_H, TILE_MIN_W } from "../web/src/lib/layout.ts";
 
@@ -57,6 +58,38 @@ describe("transcript", () => {
 
     applyLines(s, [line({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: "ok" }] } })]);
     expect(s.pending).toEqual([]);
+  });
+
+  it("knows the permission mode of the last message", () => {
+    const s = emptyState("/x.jsonl");
+    applyLines(s, [line({ type: "permission-mode", permissionMode: "plan" })]);
+    expect([s.mode, s.modeAt]).toEqual(["plan", null]);
+    applyLines(s, [
+      line({ type: "user", permissionMode: "auto", message: { content: "Go" }, timestamp: "2026-11-01T10:00:00Z" }),
+      line({ type: "user", isSidechain: true, permissionMode: "manual", message: { content: "agent" }, timestamp: "2026-11-01T10:05:00Z" }),
+    ]);
+    expect([s.mode, s.modeAt]).toEqual(["auto", Date.parse("2026-11-01T10:00:00Z")]);
+  });
+});
+
+describe("model, effort and mode", () => {
+  it("lets through only real choices, so nothing else reaches Claude Code's command line", () => {
+    for (const m of ["opus", "opus[1m]", "claude-opus-5-5", "claude-opus-5-5[1m]", "sonnet"]) expect(isModel(m)).toBe(true);
+    for (const m of ["", "--dangerously-skip-permissions", "opus; rm -rf ~", "Opus", "opus[2m]", 3]) expect(isModel(m)).toBe(false);
+    expect(isEffort("xhigh")).toBe(true);
+    expect(isEffort("ultra")).toBe(false);
+    expect(isMode("acceptEdits")).toBe(true);
+    expect(isMode("bypassPermissions")).toBe(false);
+  });
+
+  it("names a model and a mode the way Claude Code shows them", () => {
+    expect(modelAlias("claude-opus-5-5")).toBe("opus");
+    expect(modelAlias("claude-opus-5-5[1m]")).toBe("opus[1m]");
+    expect(modelAlias("claude-fable-5-1")).toBe("fable");
+    expect(modelAlias("gpt-5")).toBeNull();
+    expect(modeName("acceptEdits")).toBe("accept edits");
+    expect(modeName("default")).toBe("manual");
+    expect(modeName(null)).toBeNull();
   });
 
   it("forgets a tool call the person abandoned by typing a new message", () => {

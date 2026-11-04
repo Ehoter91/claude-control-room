@@ -3036,3 +3036,85 @@ html.is-menubar body::before {
   color: var(--warn);
   font-size: 12.5px;
 }
+
+/* Model, effort and mode: chips that open a menu to change them */
+.foot-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: -3px -5px;
+  padding: 3px 5px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.foot-pick:hover,
+.foot-pick.is-open {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+.foot-chev {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.foot-pick:hover .foot-chev,
+.foot-pick.is-open .foot-chev,
+.monitor:hover .foot-chev {
+  opacity: 0.6;
+}
+.foot-pick.is-busy {
+  animation: tune-busy 1s ease-in-out infinite alternate;
+}
+@keyframes tune-busy {
+  to {
+    opacity: 0.45;
+  }
+}
+.tune-menu {
+  position: fixed;
+  right: auto;
+  top: auto;
+  z-index: 200;
+  min-width: 250px;
+}
+.tune-menu .menu-note {
+  max-width: 280px;
+  white-space: normal;
+}
+.tune-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.tune-label .is-hidden {
+  visibility: hidden;
+}
+.menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.menu-item:disabled:hover {
+  background: transparent;
+}
+.tune-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-right: 4px;
+}
+.field-trio {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.field-hint {
+  margin-top: 8px;
+  color: var(--text-3);
+  font-size: 12px;
+}

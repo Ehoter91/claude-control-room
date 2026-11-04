@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
+import { isEffort, isMode, isModel } from "../shared/claude.ts";
 import { isHostedName } from "../shared/hosted.ts";
 import type { ActionResult } from "../shared/types.ts";
 import { APP_DIR } from "./paths.ts";
@@ -68,6 +69,9 @@ export interface StartOptions {
   cwd: string;
   prompt?: string | null;
   resume?: string | null; // a session id to continue
+  model?: string | null; // an alias such as "opus", or a full model name
+  effort?: string | null;
+  mode?: string | null; // permission mode
   cols?: number;
   rows?: number;
 }
@@ -78,7 +82,12 @@ export interface StartOptions {
  */
 export function newSessionArgs(name: string, o: StartOptions, shell = process.env.SHELL || "/bin/zsh"): string[] {
   // "--" ends Claude Code's own options, so a message that starts with "-" stays a message.
-  const claude = o.resume ? ["--resume", o.resume] : o.prompt ? ["--", o.prompt] : [];
+  const claude = [
+    ...(o.model ? ["--model", o.model] : []),
+    ...(o.effort ? ["--effort", o.effort] : []),
+    ...(o.mode ? ["--permission-mode", o.mode] : []),
+    ...(o.resume ? ["--resume", o.resume] : o.prompt ? ["--", o.prompt] : []),
+  ];
   const cols = String(Math.max(40, Math.min(400, Math.round(o.cols ?? 120))));
   const rows = String(Math.max(10, Math.min(200, Math.round(o.rows ?? 36))));
   // "$@" hands the prompt over as one argument, so nothing in it is read by the shell.
@@ -98,6 +107,9 @@ export async function startSession(o: StartOptions): Promise<ActionResult & { na
   }
   if (o.prompt !== undefined && o.prompt !== null && typeof o.prompt !== "string") return { ok: false, message: "The first message must be text." };
   if (o.resume && !SESSION_ID.test(o.resume)) return { ok: false, message: "That is not a Claude Code session id." };
+  if (o.model && !isModel(o.model)) return { ok: false, message: "That is not a model name." };
+  if (o.effort && !isEffort(o.effort)) return { ok: false, message: "That is not an effort level." };
+  if (o.mode && !isMode(o.mode)) return { ok: false, message: "That is not a permission mode." };
   await writeConf();
   const name = `cr-${randomBytes(4).toString("hex")}`;
   const started = await tmux(newSessionArgs(name, o), 10_000);

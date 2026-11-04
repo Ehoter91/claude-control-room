@@ -3,6 +3,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { pathToFileURL } from "node:url";
+import { isEffort, isMode, modeName, MODELS } from "../shared/claude.ts";
 import { isIdeId, openTarget, targetName } from "../shared/ides.ts";
 import type { ActionResult, Session, Settings, Snapshot, WorktreeReport } from "../shared/types.ts";
 import { demoClosePlan, DEMO_DEFAULT_COUNT, demoSnapshot, demoWorktrees } from "./demo-data.ts";
@@ -83,6 +84,25 @@ export async function startDemo(opts: { port?: number; sessions?: number } = {})
       }
       case "move":
         return { ok: false, message: "In the app, this continues the session in a console in Control Room." };
+      case "model": {
+        const model = (await body<{ model?: unknown }>(req)).model;
+        const m = MODELS.find((x) => x.id === model);
+        if (!m) return { ok: false, message: "That is not a model name." };
+        update(pid, () => ({ model: m.label, modelId: m.id }));
+        return { ok: true, message: `Now on ${m.label}` };
+      }
+      case "effort": {
+        const effort = (await body<{ effort?: unknown }>(req)).effort;
+        if (!isEffort(effort)) return { ok: false, message: "That is not an effort level." };
+        update(pid, () => ({ effort, effortIsDefault: false }));
+        return { ok: true, message: `Effort set to ${effort}` };
+      }
+      case "mode": {
+        const mode = (await body<{ mode?: unknown }>(req)).mode;
+        if (!isMode(mode)) return { ok: false, message: "That is not a permission mode." };
+        update(pid, () => ({ mode }));
+        return { ok: true, message: `Mode set to ${modeName(mode)}` };
+      }
     }
     return null;
   }
@@ -116,7 +136,7 @@ export async function startDemo(opts: { port?: number; sessions?: number } = {})
     }
     if (req.method !== "POST") return send(res, 404, { ok: false, message: "Not found" });
 
-    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename|move)$/.exec(p);
+    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename|move|model|effort|mode)$/.exec(p);
     if (m) {
       const out = await sessionAction(Number(m[1]), m[2], req);
       return send(res, out ? 200 : 404, out ?? { ok: false, message: "Unknown action" });

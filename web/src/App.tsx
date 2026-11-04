@@ -43,7 +43,8 @@ function useKeyboard(visible: Session[]) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.closest("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
+      // An open menu took this key already.
+      if (e.defaultPrevented || target.closest("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
       const st = getState();
       if (e.key === "Escape") {
         // The new-session dialog decides for itself: it may hold a console that still waits for an answer.

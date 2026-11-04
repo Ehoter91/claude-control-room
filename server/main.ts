@@ -19,6 +19,9 @@ import {
   pruneWorktrees,
   removeWorktrees,
   renameSession,
+  setEffort,
+  setMode,
+  setModel,
   startRemoteControl,
 } from "./actions.ts";
 import { repoClaims } from "./claims.ts";
@@ -84,6 +87,12 @@ export async function startServer(opts: { port?: number; dev?: boolean } = {}): 
         return renameSession(monitor, pid, (await body<{ name?: unknown }>(req)).name);
       case "move":
         return moveSession(monitor, pid);
+      case "model":
+        return setModel(monitor, pid, (await body<{ model?: unknown }>(req)).model);
+      case "effort":
+        return setEffort(monitor, pid, (await body<{ effort?: unknown }>(req)).effort);
+      case "mode":
+        return setMode(monitor, pid, (await body<{ mode?: unknown }>(req)).mode);
     }
     return null;
   };
@@ -176,14 +185,14 @@ export async function startServer(opts: { port?: number; dev?: boolean } = {}): 
       const ok = m[2] === "input" ? typeInConsole(m[1], b.data as string) : resizeConsole(m[1], Number(b.cols), Number(b.rows));
       return send(res, 200, { ok, message: ok ? "Sent" : "That console is closed." });
     }
-    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename|move)$/.exec(p);
+    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename|move|model|effort|mode)$/.exec(p);
     if (m) {
       const out = await sessionAction(Number(m[1]), m[2], req);
       return send(res, out ? 200 : 404, out ?? { ok: false, message: "Unknown action" });
     }
     switch (p) {
       case "/api/sessions/new":
-        return send(res, 200, await newSession(monitor, await body<{ cwd?: unknown; prompt?: unknown }>(req)));
+        return send(res, 200, await newSession(monitor, await body<Parameters<typeof newSession>[1]>(req)));
       case "/api/open": {
         const b = await body<{ url?: string; folder?: string }>(req);
         if (b.url) return send(res, 200, openUrl(b.url));

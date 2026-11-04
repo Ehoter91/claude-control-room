@@ -1,6 +1,6 @@
 // Sessions that run in Control Room, and their console, against a real tmux server of the test's own.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -36,6 +36,8 @@ describe("hosted sessions", () => {
     expect(hosted.newSessionArgs("cr-0a1b2c3d", { cwd: "/repo", prompt: "-x" }).slice(-2)).toEqual(["--", "-x"]);
     expect(hosted.newSessionArgs("cr-0a1b2c3d", { cwd: "/repo", resume: "abc" }).slice(-2)).toEqual(["--resume", "abc"]);
     expect(hosted.newSessionArgs("cr-0a1b2c3d", { cwd: "/repo" }).at(-1)).toBe("claude");
+    const tuned = hosted.newSessionArgs("cr-0a1b2c3d", { cwd: "/repo", prompt: "hi", model: "opus[1m]", effort: "high", mode: "plan" });
+    expect(tuned.slice(tuned.indexOf("claude", tuned.indexOf("-lic") + 2))).toEqual(["claude", "--model", "opus[1m]", "--effort", "high", "--permission-mode", "plan", "--", "hi"]);
   });
 
   it("starts Claude Code without the variables of whoever started Control Room", () => {
@@ -48,6 +50,23 @@ describe("hosted sessions", () => {
     expect((await hosted.startSession({ cwd: join(home, "nope") })).ok).toBe(false);
     expect((await hosted.startSession({ cwd: "relative/path" })).ok).toBe(false);
     expect((await hosted.startSession({ cwd: home, resume: "--mcp-config x" })).ok).toBe(false);
+    expect((await hosted.startSession({ cwd: home, model: "opus --settings x" })).ok).toBe(false);
+    expect((await hosted.startSession({ cwd: home, effort: "ultra" })).ok).toBe(false);
+    expect((await hosted.startSession({ cwd: home, mode: "bypassPermissions" })).ok).toBe(false);
+  });
+
+  it("puts back the defaults that /model and /effort save, and nothing else", async () => {
+    const { keepDefaults } = await import("../server/statusline.ts");
+    const file = join(home, ".claude", "settings.json");
+    mkdirSync(join(home, ".claude"), { recursive: true });
+    writeFileSync(file, JSON.stringify({ model: "opus", modelSettings: { "claude-opus-5-5": { effortLevel: "xhigh" } }, theme: "dark" }));
+    const out = await keepDefaults(async () => {
+      // What Claude Code writes when you pick Sonnet at high effort, plus a change of your own meanwhile.
+      writeFileSync(file, JSON.stringify({ model: "sonnet", modelSettings: { "claude-opus-5-5": { effortLevel: "xhigh" }, "claude-sonnet-5-5": { effortLevel: "high" } }, effortLevel: "high", theme: "light" }));
+      return "done";
+    });
+    expect(out).toBe("done");
+    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ model: "opus", modelSettings: { "claude-opus-5-5": { effortLevel: "xhigh" } }, theme: "light" });
   });
 
   it("opens a session that runs here in its console", () => {

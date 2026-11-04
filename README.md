@@ -35,6 +35,7 @@ No more searching through terminal tabs.
 
 - 🔍 **It finds every session.** Start `claude` in any terminal, and it shows up a moment later.
 - ⌨️ **No terminal needed.** Start a session here with **New session**, and type to it in its console in the dashboard.
+- 🎛️ **Model, effort and mode on every tile.** Click one in the tile's footer to change it for that session.
 - 🚦 **Live status in plain words:** working, needs your approval, asked you a question, waiting for your reply, idle, inactive.
 - ✅ **Approve, reject and answer** from the dashboard or from the menu bar. You see the exact command first.
 - 📱 **Take a session to your phone.** Click **rc** on its tile, and the session shows up in the Claude app. It keeps running on your Mac.
@@ -103,6 +104,17 @@ Close it with **Close…**, or type `/exit` in its console.
 
 A session that runs in another terminal, like PyCharm's, shows **Move here** once it is idle.
 Control Room stops it there and continues the same conversation here, with `claude --resume`. Then its old terminal tab is no longer needed.
+It keeps its model, effort and mode.
+
+### Model, effort and mode
+
+A tile's footer shows the session's model, effort and permission mode, for example `Opus 5.5 · xhigh · auto`.
+Click one to pick another. The change is for that session only: your defaults for new sessions stay as they were.
+**New session** asks for all three. The mode starts on **auto**.
+
+Control Room types `/model` or `/effort` into the session, as you would. So it changes them for sessions it can type into: the ones started here, the ones in tmux, and VS Code terminals with the helper. The model and effort change between turns.
+The mode changes with Shift+Tab, so Control Room has to read the screen: it does this for sessions started here and the ones in tmux.
+For a session in another terminal, like PyCharm's, click **Move here** first.
 
 ### Take it with you
 
@@ -267,6 +279,7 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 | Continue a session on your phone | Click **rc** on its tile. Then open the Claude app and tap **Code**. |
 | Start a session and type to it | Click **New session**, pick a folder, click **Start session**. Type in its console. |
 | Stop using a terminal for a session | Open its details and click **Move here**, once it is idle. |
+| Change a session's model, effort or mode | Click it in the tile's footer and pick another. |
 | Rename a session | Click ✏️ on its tile or in its details, type the name, press Enter or click elsewhere. Its VS Code tab gets the name too. |
 | Move the icon | Hold ⌘ and drag the icon along the menu bar. |
 | Quit | Right-click the icon and choose **Quit**. |
@@ -342,10 +355,12 @@ The console is a tmux control-mode client: it streams the session's output to th
 - **Rename** changes only the VS Code tab, or for other terminals `~/.claude-control-room/names.json`. It never types into the session.
 - A console types only what you type in it. It reaches only the sessions Control Room started, on its own tmux server.
 - **Move here** works only on an idle session, so it never cuts off a turn. The conversation continues from Claude Code's own transcript.
+- Model and effort change only on an idle session, and the mode never while the session asks you something: Shift+Tab there would approve edits.
 - Shortcut tokens stay in `~/.claude-control-room/config.json`. The page only ever sees their last four characters.
 - The only calls that leave your Mac are: GitHub, through your own `gh`; Shortcut, only if you add a token; and your own `claude` command, for your account status and the short summaries.
 - After **rc**, Claude Code itself shares that session with your claude.ai account, as `/remote-control` always does. Control Room sends nothing there.
 - The app keeps its own settings and caches in `~/.claude-control-room/`. The only change it makes to Claude Code is the status line and hook in `~/.claude/settings.json`. You add them with **Connect** and remove them with **Disconnect**.
+- `/model` and `/effort` also save the choice as your default for new sessions. After a change from a tile, Control Room puts your previous `model` and effort defaults back in `~/.claude/settings.json`, and touches nothing else there.
 
 </details>
 

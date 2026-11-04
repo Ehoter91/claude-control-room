@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { isEffort, isMode, isModel, modeName, modelAlias, MODELS } from "../shared/claude.ts";
 import { openTarget } from "../shared/ides.ts";
 import type { ActionResult, ClosePlan, CloseRequest, Session, WorktreeReport } from "../shared/types.ts";
 import { endClaim, forgetClaims, repoClaims } from "./claims.ts";
@@ -8,10 +9,11 @@ import { prForBranch, type PrRow } from "./github.ts";
 import { hostedName, hostedSessions, startSession, tmux, tmuxReady } from "./hosted.ts";
 import { openInIde } from "./ide.ts";
 import type { Monitor } from "./monitor.ts";
-import { readSessionFiles } from "./monitor.ts";
+import { findTranscript, noteMode, readSessionFiles, type SessionFile } from "./monitor.ts";
 import { cleanName, saveName } from "./names.ts";
 import { launch, run, sleep } from "./proc.ts";
 import { CLEAR_DRAFT, REMOTE_COMMAND, remoteRefusal } from "./remote.ts";
+import { keepDefaults, readTap, type Tap } from "./statusline.ts";
 import { closeTerminal, focusTerminal, renameTerminal, sendText } from "./vscode.ts";
 import { buildReport, insidePath } from "./worktrees.ts";
 
@@ -26,14 +28,20 @@ async function freshStatus(pid: number): Promise<{ status: string | null; waitin
   return f ? { status: f.status, waitingFor: f.waitingFor, bridgeSessionId: f.bridgeSessionId } : null;
 }
 
+/**
+ * Runs a tmux command on the session's pane. A session started here lives on Control Room's own tmux server; pane ids
+ * like %0 count per server. Its name decides, not the last list from tmux, so a key never lands in a pane of the same
+ * id on your own tmux.
+ */
+function paneTmux(s: Session & { tmux: string }, command: string, ...args: string[]) {
+  const full = [command, "-t", s.tmux.split(".").pop() ?? s.tmux, ...args];
+  return hostedName(s.tmux) ? tmux(full) : run("tmux", full, { timeoutMs: 5_000 });
+}
+
 /** Sends raw keys to the terminal that runs the session: tmux directly, VS Code through the helper. */
 async function sendKeys(s: Session, text: string, tmuxKey: string | null): Promise<ActionResult> {
   if (s.tmux) {
-    const pane = s.tmux.split(".").pop() ?? s.tmux;
-    const args = tmuxKey ? ["send-keys", "-t", pane, tmuxKey] : ["send-keys", "-t", pane, "-l", text];
-    // A session started here lives on Control Room's own tmux server; pane ids like %0 count per server. Its name
-    // decides, not the last list from tmux, so a key never lands in a pane of the same id on your own tmux.
-    const out = hostedName(s.tmux) ? await tmux(args) : await run("tmux", args, { timeoutMs: 5_000 });
+    const out = await paneTmux({ ...s, tmux: s.tmux }, "send-keys", ...(tmuxKey ? [tmuxKey] : ["-l", text]));
     return { ok: out.ok, message: out.ok ? "Sent" : out.stderr.trim() };
   }
   if (s.vscodeLinked) {
@@ -119,6 +127,132 @@ export async function startRemoteControl(monitor: Monitor, pid: number): Promise
   return { ok: false, message: "Sent /remote-control, but it did not connect. Look at the session to see why." };
 }
 
+const MOVE_HINT = "Move it here first (Move here, in its details).";
+
+/** Why the session's model, effort or mode can't change from here right now, or null when it can. */
+async function tuneRefusal(s: Session, what: "model" | "effort" | "mode"): Promise<string | null> {
+  if (what === "mode" ? !s.tmux : !s.tmux && !s.vscodeLinked) {
+    // The mode moves one Shift+Tab at a time, so Control Room has to see the screen to know where it is.
+    return what === "mode" && s.vscodeLinked
+      ? `Press Shift+Tab in its terminal to change the mode, or ${MOVE_HINT.toLowerCase()}`
+      : `Control Room can't type in this terminal. ${MOVE_HINT}`;
+  }
+  const now = await freshStatus(s.pid);
+  if (!now) return "That session is gone.";
+  // An open prompt takes every key: Shift+Tab there approves edits for the rest of the session.
+  if (now.status === "waiting") return "Answer the session first, then try again.";
+  // A command typed during a turn waits for the turn to end, after the saved default was put back.
+  if (what !== "mode" && now.status !== "idle") return `Wait until it is idle. Claude Code changes the ${what} between turns.`;
+  return null;
+}
+
+/** Types a slash command into an idle session, the way /remote-control goes in. */
+async function typeCommand(s: Session, command: string): Promise<ActionResult> {
+  // The space closes the command menu, so Enter runs this command and never a suggestion still on screen.
+  for (const [text, key] of [...CLEAR_DRAFT, [`${command} `, null] as const]) {
+    const r = await sendKeys(s, text, key);
+    if (!r.ok) return r;
+  }
+  await sleep(300);
+  if ((await freshStatus(s.pid))?.status !== "idle") {
+    for (const [text, key] of CLEAR_DRAFT) await sendKeys(s, text, key);
+    return { ok: false, message: "It started something meanwhile, so nothing changed." };
+  }
+  return sendKeys(s, KEYS.enter, "Enter");
+}
+
+/** Waits for the status line to report what the command changed. It can lag a few seconds behind the command. */
+async function tapShows(sessionId: string, done: (t: Tap) => boolean): Promise<Tap | null> {
+  for (let i = 0; i < 40; i++) {
+    await sleep(200);
+    const t = await readTap(sessionId);
+    if (t && done(t)) return t;
+  }
+  return null;
+}
+
+export async function setModel(monitor: Monitor, pid: number, model: unknown): Promise<ActionResult> {
+  const s = find(monitor, pid);
+  if (!s) return { ok: false, message: "That session is gone." };
+  if (!isModel(model)) return { ok: false, message: "That is not a model name." };
+  const label = MODELS.find((m) => m.id === model)?.label ?? model;
+  if (modelAlias(s.modelId) === model) return { ok: true, message: `It already runs ${label}.` };
+  const refused = await tuneRefusal(s, "model");
+  if (refused) return { ok: false, message: refused };
+  const out = await keepDefaults(async () => {
+    const sent = await typeCommand(s, `/model ${model}`);
+    if (!sent.ok) return sent;
+    const t = await tapShows(s.sessionId, (x) => modelAlias(x.modelId) === model);
+    await sleep(300); // Claude Code saves the default right around the time it reports the change
+    return t ? { ok: true, message: `Now on ${t.model ?? label}` } : { ok: true, message: `Sent /model ${model}. If it did not change, look at the session to see why.` };
+  });
+  await monitor.tick();
+  return out;
+}
+
+export async function setEffort(monitor: Monitor, pid: number, effort: unknown): Promise<ActionResult> {
+  const s = find(monitor, pid);
+  if (!s) return { ok: false, message: "That session is gone." };
+  if (!isEffort(effort)) return { ok: false, message: "That is not an effort level." };
+  if (s.effort === effort && !s.effortIsDefault) return { ok: true, message: `Effort is ${effort} already.` };
+  const refused = await tuneRefusal(s, "effort");
+  if (refused) return { ok: false, message: refused };
+  const out = await keepDefaults(async () => {
+    const sent = await typeCommand(s, `/effort ${effort}`);
+    if (!sent.ok) return sent;
+    const t = await tapShows(s.sessionId, (x) => x.effort === effort);
+    await sleep(300);
+    return t ? { ok: true, message: `Effort set to ${effort}` } : { ok: true, message: `Sent /effort ${effort}. If it did not change, look at the session to see why.` };
+  });
+  await monitor.tick();
+  return out;
+}
+
+const MODE_LINES: [RegExp, string][] = [
+  [/auto mode on/i, "auto"],
+  [/manual mode on/i, "manual"],
+  [/accept edits on/i, "acceptEdits"],
+  [/plan mode on/i, "plan"],
+  [/bypass permissions on/i, "bypassPermissions"],
+];
+
+/** The permission mode Claude Code shows under its prompt, read off the pane. */
+async function screenMode(s: Session & { tmux: string }): Promise<string | null> {
+  const out = await paneTmux(s, "capture-pane", "-p");
+  if (!out.ok) return null;
+  const bottom = out.stdout.split("\n").filter((l) => l.trim()).slice(-4).join("\n");
+  return MODE_LINES.find(([re]) => re.test(bottom))?.[1] ?? null;
+}
+
+/** Presses Shift+Tab until the mode under the prompt is the one asked for, as you would by hand. */
+export async function setMode(monitor: Monitor, pid: number, mode: unknown): Promise<ActionResult> {
+  const s = find(monitor, pid);
+  if (!s) return { ok: false, message: "That session is gone." };
+  if (!isMode(mode)) return { ok: false, message: "That is not a permission mode." };
+  const refused = await tuneRefusal(s, "mode");
+  if (refused || !s.tmux) return { ok: false, message: refused ?? MOVE_HINT };
+  const pane = { ...s, tmux: s.tmux };
+  const start = await screenMode(pane);
+  if (!start) return { ok: false, message: "Control Room could not read the mode on its screen. Close any open menu in the session and try again." };
+  let current = start;
+  for (let i = 0; i < 6 && current !== mode; i++) {
+    if ((await freshStatus(pid))?.status === "waiting") return { ok: false, message: `It asked something meanwhile. The mode is ${modeName(current)}.` };
+    const r = await sendKeys(s, "\u001b[Z", "BTab");
+    if (!r.ok) return r;
+    const was = current;
+    for (let j = 0; j < 8 && current === was; j++) {
+      await sleep(100);
+      current = (await screenMode(pane)) ?? current;
+    }
+    // Back where it started: this session's cycle has no such mode.
+    if (current === start) break;
+  }
+  if (current !== mode) return { ok: false, message: `Its Shift+Tab cycle has no ${modeName(mode)} mode. It is in ${modeName(current)} mode.` };
+  noteMode(s.sessionId, mode);
+  await monitor.tick();
+  return { ok: true, message: `Mode set to ${modeName(mode)}` };
+}
+
 export async function focusSession(monitor: Monitor, pid: number): Promise<ActionResult> {
   const s = find(monitor, pid);
   if (!s) return { ok: false, message: "That session is gone." };
@@ -163,25 +297,40 @@ export async function renameSession(monitor: Monitor, pid: number, raw: unknown)
   return { ok: true, message: name ? `Renamed to “${name}”` : "Name cleared" };
 }
 
-/** The pid of the Claude Code that runs in hosted tmux session `name`, once Claude Code has written its session file. */
-async function hostedPid(name: string, waitMs: number): Promise<number | null> {
+/** The session file of the Claude Code that runs in hosted tmux session `name`, once Claude Code has written it. */
+async function hostedFile(name: string, waitMs: number): Promise<SessionFile | null> {
   for (const until = Date.now() + waitMs; ; await sleep(250)) {
     const f = (await readSessionFiles()).find((x) => hostedName(x.tmux) === name);
-    if (f) return f.pid;
+    if (f) return f;
     if (Date.now() > until) return null;
   }
 }
 
+interface NewSessionBody {
+  cwd?: unknown;
+  prompt?: unknown;
+  model?: unknown;
+  effort?: unknown;
+  mode?: unknown;
+}
+
 /** Starts Claude Code in Control Room, in a folder of your choice, with an optional first message. */
-export async function newSession(monitor: Monitor, b: { cwd?: unknown; prompt?: unknown }): Promise<ActionResult & { pid?: number; name?: string }> {
+export async function newSession(monitor: Monitor, b: NewSessionBody): Promise<ActionResult & { pid?: number; name?: string }> {
   const prompt = typeof b.prompt === "string" && b.prompt.trim() ? b.prompt.trim() : null;
-  const r = await startSession({ cwd: typeof b.cwd === "string" ? b.cwd : "", prompt });
+  // Left out, each one is Claude Code's own default.
+  const model = isModel(b.model) ? b.model : null;
+  const effort = isEffort(b.effort) ? b.effort : null;
+  const mode = isMode(b.mode) ? b.mode : null;
+  const r = await startSession({ cwd: typeof b.cwd === "string" ? b.cwd : "", prompt, model, effort, mode });
   if (!r.ok || !r.name) return r;
   // Claude Code writes its session file within a second or two; a longer wait means it asks something first.
-  const pid = await hostedPid(r.name, 5_000);
-  if (!pid && (await hostedSessions())?.has(r.name) === false) return { ok: false, message: STOPPED_AT_START };
+  const file = await hostedFile(r.name, 5_000);
+  if (!file && (await hostedSessions())?.has(r.name) === false) return { ok: false, message: STOPPED_AT_START };
+  if (file && mode) noteMode(file.sessionId, mode);
   await monitor.fresh();
-  return pid ? { ok: true, message: "Started", pid, name: r.name } : { ok: true, message: "Claude Code asks something first. Answer it in the console.", name: r.name };
+  return file
+    ? { ok: true, message: "Started", pid: file.pid, name: r.name }
+    : { ok: true, message: "Claude Code asks something first. Answer it in the console.", name: r.name };
 }
 
 const STOPPED_AT_START = "Claude Code stopped right after it started. Run claude in that folder in a terminal once to see why.";
@@ -206,13 +355,24 @@ export async function moveSession(monitor: Monitor, pid: number): Promise<Action
     // Everything a restart here needs is checked before Claude Code stops there.
     if (!tmuxReady()) return { ok: false, message: "Control Room needs tmux for this. Install it: brew install tmux" };
     if (!existsSync(file.cwd)) return { ok: false, message: `Its folder is gone: ${file.cwd}` };
+    // Claude Code saves a conversation at its first message; one with none has nothing to resume, so it starts fresh.
+    const resume = (await findTranscript(s.sessionId, file.cwd, true)) ? s.sessionId : undefined;
     if (!(await stopProcess(pid))) return { ok: false, message: "Claude did not stop, so the session stays where it is." };
-    const resumeHint = `To continue it yourself, run in ${file.cwd}: claude --resume ${s.sessionId}`;
+    const resumeHint = resume ? `To continue it yourself, run in ${file.cwd}: claude --resume ${resume}` : `To start it yourself, run claude in ${file.cwd}`;
+    // It keeps its model, effort and mode: a resumed session would start on your defaults.
+    const mode = s.mode === "default" ? "manual" : s.mode;
+    const keep = {
+      model: isModel(s.modelId) ? s.modelId : null,
+      effort: !s.effortIsDefault && isEffort(s.effort) ? s.effort : null,
+      mode: isMode(mode) ? mode : null,
+    };
     // Claude Code keeps a conversation under the folder it started in, so it continues from there.
-    const r = await startSession({ cwd: file.cwd, resume: s.sessionId });
+    const r = await startSession({ cwd: file.cwd, resume, ...keep });
     if (!r.ok || !r.name) return { ok: false, message: `It stopped, but did not start here: ${r.message} ${resumeHint}` };
-    const pidHere = await hostedPid(r.name, 15_000);
+    const fileHere = await hostedFile(r.name, 15_000);
+    const pidHere = fileHere?.pid ?? null;
     if (!pidHere && (await hostedSessions())?.has(r.name) === false) return { ok: false, message: `It stopped, but did not start here. ${resumeHint}` };
+    if (fileHere && keep.mode) noteMode(fileHere.sessionId, keep.mode);
     // A VS Code tab's name stays with the tab, so it comes along as a name saved here.
     if (pidHere && (s.nameSource === "tab" || s.nameSource === "saved")) {
       const moved = (await readSessionFiles()).find((x) => x.pid === pidHere);

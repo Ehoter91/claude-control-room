@@ -7,6 +7,7 @@ import { popoutSession } from "../lib/native.ts";
 import { act, api, consoleName, setState, useOpenName, useStore } from "../store.ts";
 import { ApprovalCard, NameEditor, openUrl, PrChip, QuestionCard, RemoteButton, RenameButton } from "./Monitor.tsx";
 import { StatusOrb, useNow } from "./Primitives.tsx";
+import { TuneChips } from "./Tuning.tsx";
 
 // xterm.js is big; only a window that shows a console loads it.
 const Console = lazy(() => import("./Console.tsx"));
@@ -244,9 +245,10 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
               )}
             </Row>
           )}
-          <Row label="Model">
-            {s.model ?? "—"} · effort {s.effort ?? "—"}
-            {s.effortIsDefault && <span className="muted"> (default)</span>}
+          <Row label="Runs with">
+            <span className="tune-row">
+              <TuneChips s={s} />
+            </span>
             {s.contextPercent !== null && <span className="muted"> · context {Math.round(s.contextPercent)}%</span>}
             {money(s.costUsd) && <span className="muted"> · {money(s.costUsd)}</span>}
           </Row>
