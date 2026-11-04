@@ -1679,7 +1679,8 @@ button.chip:hover {
 }
 
 /* ---------- focus layout ---------- */
-.focus {
+/* Not ".focus": xterm puts that class on a console while it has the keyboard. */
+.focus-layout {
   flex: 1;
   min-height: 0;
   height: 100%;
