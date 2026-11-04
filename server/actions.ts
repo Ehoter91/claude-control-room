@@ -13,6 +13,7 @@ import { findTranscript, noteMode, readSessionFiles, type SessionFile } from "./
 import { cleanName, saveName } from "./names.ts";
 import { launch, run, sleep } from "./proc.ts";
 import { CLEAR_DRAFT, REMOTE_COMMAND, remoteRefusal } from "./remote.ts";
+import { place } from "./order.ts";
 import { keepDefaults, readTap, type Tap } from "./statusline.ts";
 import { closeTerminal, focusTerminal, renameTerminal, sendText } from "./vscode.ts";
 import { buildReport, insidePath } from "./worktrees.ts";
@@ -251,6 +252,16 @@ export async function setMode(monitor: Monitor, pid: number, mode: unknown): Pro
   noteMode(s.sessionId, mode);
   await monitor.tick();
   return { ok: true, message: `Mode set to ${modeName(mode)}` };
+}
+
+/** Puts a session where its card was dropped: between the cards `above` and `below` in the list you saw. */
+export async function placeSession(monitor: Monitor, pid: number, b: { above?: unknown; below?: unknown }): Promise<ActionResult> {
+  const s = find(monitor, pid);
+  if (!s) return { ok: false, message: "That session is gone." };
+  const keyOf = (other: unknown) => (typeof other === "number" && other !== pid ? (find(monitor, other)?.sortKey ?? null) : null);
+  await place(s.sessionId, keyOf(b.above), keyOf(b.below));
+  await monitor.fresh();
+  return { ok: true, message: "Moved" };
 }
 
 export async function focusSession(monitor: Monitor, pid: number): Promise<ActionResult> {

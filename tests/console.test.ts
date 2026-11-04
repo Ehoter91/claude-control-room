@@ -69,6 +69,29 @@ describe("hosted sessions", () => {
     expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ model: "opus", modelSettings: { "claude-opus-5-5": { effortLevel: "xhigh" } }, theme: "light" });
   });
 
+  it("keeps a dropped card where it was dropped, until the session is used again", async () => {
+    const order = await import("../server/order.ts");
+    expect(order.sortKey("a", 5_000)).toBe(5_000);
+    await order.place("a", 3_000, 1_000);
+    const dropped = order.sortKey("a", 5_000);
+    expect(dropped).toBe(2_000);
+    expect(order.sortKey("a", Date.now() + 1_000)).toBeGreaterThan(dropped); // used after the drop: by its use again
+    await order.place("b", 3_000, null);
+    expect(order.sortKey("b", 0)).toBe(3_000 - 60_000);
+    await order.place("c", null, 9_000);
+    expect(order.sortKey("c", 0)).toBeGreaterThanOrEqual(Date.now() - 1_000);
+    expect(JSON.parse(readFileSync(join(home, ".claude-control-room", "order.json"), "utf8"))).toHaveProperty("a.key", 2_000);
+  });
+
+  it("finds your last message even when much tool output came after it", async () => {
+    const { readTranscript } = await import("../server/transcript.ts");
+    const file = join(home, "long.jsonl");
+    const said = JSON.stringify({ type: "user", message: { content: "Fix the build" }, timestamp: "2026-11-04T10:00:00Z" });
+    const noise = Array.from({ length: 150 }, (_, i) => JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "x".repeat(10_000) }] }, timestamp: `2026-11-04T10:0${Math.floor(i / 60)}:00Z` }));
+    writeFileSync(file, [said, ...noise].join("\n") + "\n");
+    expect((await readTranscript(file))?.lastPromptAt).toBe(Date.parse("2026-11-04T10:00:00Z"));
+  });
+
   it("does not update a copy that was not built from a git checkout", async () => {
     const update = await import("../server/update.ts");
     expect(update.updateState().source).toBeNull();

@@ -2,6 +2,7 @@ import { Columns2, LayoutGrid, MonitorUp, Rows3 } from "lucide-react";
 import { AnimatePresence, LayoutGroup } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session, Settings } from "../../../shared/types.ts";
+import { useDragOrder } from "../lib/dragOrder.ts";
 import { fitWall } from "../lib/layout.ts";
 import { native, openWallWindow, type DisplayInfo } from "../lib/native.ts";
 import { api, matchesFilter, remember, setState, useStore, VIEW, type Filter } from "../store.ts";
@@ -93,7 +94,9 @@ export function WallToolbar({ sessions, layout }: { sessions: Session[]; layout:
     <div className="wall-bar">
       <div className="wall-title">
         <h2>Sessions</h2>
-        <span className="wall-sub">newest first</span>
+        <span className="wall-sub" data-tip="A session moves to the front when you send it a message or use it here. Drag a card to put it anywhere.">
+          last used first · drag to move
+        </span>
       </div>
       <div className="seg" role="tablist" aria-label="Filter sessions">
         {FILTERS.map((f) => {
@@ -139,7 +142,15 @@ export function Wall({ sessions, layout }: { sessions: Session[]; layout: Settin
   const filter = useStore((s) => s.filter);
   const selected = useStore((s) => s.selected);
   const shown = sessions.filter((s) => matchesFilter(s, filter));
-  const [ref, box] = useBox<HTMLDivElement>();
+  const [boxRef, box] = useBox<HTMLDivElement>();
+  const dragRef = useDragOrder(shown, ".monitor", "x");
+  const ref = useCallback(
+    (el: HTMLDivElement | null) => {
+      boxRef(el);
+      dragRef(el);
+    },
+    [boxRef, dragRef],
+  );
 
   if (layout === "focus") return <FocusView sessions={shown} />;
 

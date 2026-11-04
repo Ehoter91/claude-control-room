@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { type PointerEvent as ReactPointerEvent, useEffect, useState } from "react";
+import { type PointerEvent as ReactPointerEvent, useEffect } from "react";
 import type { Session } from "../../shared/types.ts";
 import { CloseDialog } from "./components/CloseDialog.tsx";
 import { NewSessionDialog } from "./components/NewSessionDialog.tsx";
@@ -10,47 +10,23 @@ import { Toasts } from "./components/Toasts.tsx";
 import { SetupBanner, TopBar } from "./components/TopBar.tsx";
 import { Wall, WallToolbar } from "./components/Wall.tsx";
 import { WorktreesPanel } from "./components/WorktreesPanel.tsx";
-import { act, getState, matchesFilter, openSession, remember, setState, stored, useStore, VIEW } from "./store.ts";
+import { clampWidth, dragFrom, type DrawerKind, keepSizes, setDrawerWidth } from "./lib/resize.ts";
+import { act, getState, matchesFilter, openSession, setState, useStore, VIEW } from "./store.ts";
 import { openUrl } from "./components/Monitor.tsx";
 
-const DRAWER_MIN = 420;
-
-/** The drawer's width while you drag its left edge, kept apart for drawers with a console and without one. */
-function useDrawerWidth(wide: boolean) {
-  const key = wide ? "wide" : "plain";
-  const [widths, setWidths] = useState(() => stored<Record<string, number>>("cr.drawerWidths", {}));
-  const clamp = (w: number) => Math.round(Math.max(DRAWER_MIN, Math.min(window.innerWidth - 80, w)));
+function Drawer({ s }: { s: Session | null }) {
+  const kind: DrawerKind = s?.hosted ? "wide" : "plain";
+  const saved = useStore((st) => st.drawerWidths[kind]);
+  const width = saved ? clampWidth(saved) : undefined;
+  // Its left edge: drag it like a window's edge. The panel is anchored right, so it grows to the left.
   const startDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    document.body.classList.add("is-resizing");
-    let latest = widths;
-    const move = (ev: PointerEvent) => {
-      latest = { ...latest, [key]: clamp(window.innerWidth - ev.clientX) };
-      setWidths(latest);
-    };
-    // On the window, so a release anywhere ends the drag, even outside the edge or over the console.
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", up);
-      document.body.classList.remove("is-resizing");
-      remember("cr.drawerWidths", latest);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", up);
+    const w0 = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect().width;
+    dragFrom(e, "ew-resize", (dx) => setDrawerWidth(kind, w0 - dx));
   };
   const reset = () => {
-    const { [key]: _, ...rest } = widths;
-    setWidths(rest);
-    remember("cr.drawerWidths", rest);
+    setDrawerWidth(kind, null);
+    keepSizes();
   };
-  return { width: widths[key] ? clamp(widths[key]) : undefined, startDrag, reset };
-}
-
-function Drawer({ s }: { s: Session | null }) {
-  const { width, startDrag, reset } = useDrawerWidth(!!s?.hosted);
   return (
     <AnimatePresence>
       {s && (

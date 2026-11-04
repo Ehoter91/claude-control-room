@@ -84,6 +84,10 @@ Below it, each session is a tile, like a monitor on a wall. Every tile has three
 - **Middle:** the status, big and clear, with buttons when the session needs you.
 - **Bottom:** model · effort · repository, and a ring that shows how full the context window is.
 
+The session you used last comes first: the one you last sent a message, from any terminal, or typed to, answered or changed here.
+Claude's own work does not move a tile, so the wall holds still while sessions run.
+Drag a tile anywhere to put it there. It stays there until you use that session again.
+
 ### Answer without leaving
 
 <img src="docs/images/needs-you.png" alt="Two tiles: one needs approval for a command, one asks a question with three answer buttons">
@@ -101,6 +105,7 @@ The console is the session's real terminal: type messages, slash commands, `Esc`
 The bar above the console works like a window's title bar. **A↓** and **A↑** change the text size; click the number for the usual size.
 **−** minimizes the console to its bar, and **⤢** fills the whole window with it. Double-click the bar to do the same, and press `Esc` outside the console to go back.
 Drag the left edge of the details panel to make it wider or narrower. Double-click the edge for the usual width.
+The console has edges and corners of its own: drag the top or bottom for its height, a side for its width, a corner for both. Double-click an edge to reset it.
 
 A session started here keeps running when you quit Control Room. It is back in its console when the app opens again.
 Close it with **Close…**, or type `/exit` in its console.
@@ -290,6 +295,8 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 | Stop using a terminal for a session | Open its details and click **Move here**, once it is idle. |
 | Change a session's model, effort or mode | Click it in the tile's footer and pick another. |
 | Make the details panel wider | Drag its left edge. Double-click the edge to go back. |
+| Make the console taller or shorter | Drag its top or bottom edge, or a corner. |
+| Put a session's tile somewhere else | Drag it there. |
 | Make the console text bigger | Click **A↑** above the console. |
 | Give the console the whole window | Click **⤢** above it, or double-click its bar. `Esc` outside the console goes back. |
 | Update Control Room | Click **Update** at the top, or **Settings → Update**. |

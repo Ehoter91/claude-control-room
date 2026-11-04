@@ -8,6 +8,7 @@ import { act, api, consoleName, getState, setState, useOpenName, useStore } from
 import { ApprovalCard, NameEditor, openUrl, PrChip, QuestionCard, RemoteButton, RenameButton } from "./Monitor.tsx";
 import { StatusOrb, useNow } from "./Primitives.tsx";
 import { TuneChips } from "./Tuning.tsx";
+import { dragFrom, keepSizes, setConsoleHeight, setDrawerWidth } from "../lib/resize.ts";
 
 // xterm.js is big; only a window that shows a console loads it.
 const Console = lazy(() => import("./Console.tsx"));
@@ -119,6 +120,41 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+type Edge = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+const CURSOR: Record<Edge, string> = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize" };
+
+/**
+ * The console with edges and corners to drag, like a window's. Up, down, left or right away from the console makes it
+ * bigger. Its width is the details panel's, so a side edge resizes the panel. A double-click on an edge resets it.
+ */
+function ConsoleFrame({ sides, height, children }: { sides: boolean; height: number | null; children: React.ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const edges: Edge[] = sides ? ["n", "s", "e", "w", "ne", "nw", "se", "sw"] : ["n", "s"];
+  const start = (edge: Edge, e: React.PointerEvent) => {
+    const h0 = box.current!.getBoundingClientRect().height;
+    const w0 = box.current!.closest(".drawer")?.getBoundingClientRect().width ?? 0;
+    dragFrom(e, CURSOR[edge], (dx, dy) => {
+      if (edge.includes("s")) setConsoleHeight(h0 + dy);
+      if (edge.includes("n")) setConsoleHeight(h0 - dy);
+      if (edge.includes("e")) setDrawerWidth("wide", w0 + dx);
+      if (edge.includes("w")) setDrawerWidth("wide", w0 - dx);
+    });
+  };
+  const reset = (edge: Edge) => {
+    if (edge.includes("n") || edge.includes("s")) setConsoleHeight(null);
+    if (edge.includes("e") || edge.includes("w")) setDrawerWidth("wide", null);
+    keepSizes();
+  };
+  return (
+    <div className="console-frame" ref={box} style={height ? { height, flex: "none" } : undefined}>
+      {children}
+      {edges.map((edge) => (
+        <div key={edge} className={`console-edge edge-${edge}`} aria-hidden onPointerDown={(e) => start(edge, e)} onDoubleClick={() => reset(edge)} />
+      ))}
+    </div>
+  );
+}
+
 export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | "focus" | "popout" }) {
   const now = useNow();
   const a = s.activity;
@@ -129,6 +165,8 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
   const tmuxName = consoleName(s);
   const typeInto = useStore((st) => st.typeInto === s.pid);
   const consoleView = useStore((st) => (tmuxName ? st.consoleView : "normal"));
+  // A height you dragged applies in the details; folded or filling the window, the console has its own size.
+  const consoleHeight = useStore((st) => (tmuxName && consoleView === "normal" && variant !== "popout" ? st.consoleHeight : null));
   // A maximized console belongs to this session: the next one opens with its details.
   useEffect(() => () => void (getState().consoleView === "max" && setState({ consoleView: "normal" })), []);
   const where = tmuxName
@@ -139,7 +177,7 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
         ? `${ideName(s.ide)} terminal${s.vscodeLinked ? " (linked)" : ""}`
         : "Terminal";
   return (
-    <div className={`detail detail-${variant} st-${a.kind} console-${consoleView}`}>
+    <div className={`detail detail-${variant} st-${a.kind} console-${consoleView} ${consoleHeight ? "console-sized" : ""}`}>
       <div className="detail-head">
         <div className="detail-status">
           <StatusOrb kind={a.kind} size={12} />
@@ -195,17 +233,19 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
 
       {tmuxName && (
         <div className="detail-console">
-          <Suspense fallback={<div className="console" />}>
-            <Console
-              name={tmuxName}
-              autoFocus={variant === "popout" || typeInto}
-              onFocused={() => typeInto && setState({ typeInto: null })}
-              title={s.name}
-              view={consoleView}
-              onView={(v) => setState({ consoleView: v })}
-              onPopOut={variant === "popout" ? undefined : () => popoutSession(s.pid)}
-            />
-          </Suspense>
+          <ConsoleFrame sides={variant === "drawer" && consoleView === "normal"} height={consoleHeight}>
+            <Suspense fallback={<div className="console" />}>
+              <Console
+                name={tmuxName}
+                autoFocus={variant === "popout" || typeInto}
+                onFocused={() => typeInto && setState({ typeInto: null })}
+                title={s.name}
+                view={consoleView}
+                onView={(v) => setState({ consoleView: v })}
+                onPopOut={variant === "popout" ? undefined : () => popoutSession(s.pid)}
+              />
+            </Suspense>
+          </ConsoleFrame>
         </div>
       )}
 

@@ -84,6 +84,15 @@ export async function startDemo(opts: { port?: number; sessions?: number } = {})
       }
       case "move":
         return { ok: false, message: "In the app, this continues the session in a console in Control Room." };
+      case "place": {
+        const b = await body<{ above?: unknown; below?: unknown }>(req);
+        const keyOf = (other: unknown) => (typeof other === "number" ? (find(other)?.sortKey ?? null) : null);
+        const [hi, lo] = [keyOf(b.above), keyOf(b.below)];
+        const sortKey = hi !== null && lo !== null ? (hi + lo) / 2 : hi !== null ? hi - 60_000 : lo !== null ? lo + 60_000 : Date.now();
+        snap = { ...snap, sessions: snap.sessions.map((x) => (x.pid === pid ? { ...x, sortKey } : x)).sort((x, y) => y.sortKey - x.sortKey) };
+        publish();
+        return { ok: true, message: "Moved" };
+      }
       case "model": {
         const model = (await body<{ model?: unknown }>(req)).model;
         const m = MODELS.find((x) => x.id === model);
@@ -136,7 +145,7 @@ export async function startDemo(opts: { port?: number; sessions?: number } = {})
     }
     if (req.method !== "POST") return send(res, 404, { ok: false, message: "Not found" });
 
-    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename|move|model|effort|mode)$/.exec(p);
+    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename|move|model|effort|mode|place)$/.exec(p);
     if (m) {
       const out = await sessionAction(Number(m[1]), m[2], req);
       return send(res, out ? 200 : 404, out ?? { ok: false, message: "Unknown action" });

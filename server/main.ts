@@ -18,6 +18,7 @@ import {
   openUrl,
   pruneWorktrees,
   removeWorktrees,
+  placeSession,
   renameSession,
   setEffort,
   setMode,
@@ -31,7 +32,8 @@ import { listWorktrees } from "./git.ts";
 import { allPrs, checkGh } from "./github.ts";
 import { resizeConsole, stopConsole, typeInConsole, watchConsole } from "./console.ts";
 import { body, DEV_ORIGINS, DIST, refusal, send, serveStatic } from "./http.ts";
-import { Monitor } from "./monitor.ts";
+import { hostedName } from "./hosted.ts";
+import { Monitor, noteUsed } from "./monitor.ts";
 import { APP_DIR, BRIDGE_FILE, TAP_DIR } from "./paths.ts";
 import { readPower, setSleepDisabled, sudoersLine } from "./power.ts";
 import { forgetStories, testToken } from "./shortcut.ts";
@@ -61,6 +63,9 @@ async function cleanOldTaps(): Promise<void> {
     /* no taps yet */
   }
 }
+
+// Actions that count as using a session, so it moves to the front of the list. Closing and renaming do not.
+const USED_BY = new Set(["approve", "reject", "answer", "focus", "remote", "move", "model", "effort", "mode"]);
 
 export async function startServer(opts: { port?: number; dev?: boolean; installUpdate?: (builtApp: string) => void } = {}): Promise<Running> {
   await mkdir(APP_DIR, { recursive: true });
@@ -98,6 +103,8 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
         return setEffort(monitor, pid, (await body<{ effort?: unknown }>(req)).effort);
       case "mode":
         return setMode(monitor, pid, (await body<{ mode?: unknown }>(req)).mode);
+      case "place":
+        return placeSession(monitor, pid, await body<{ above?: unknown; below?: unknown }>(req));
     }
     return null;
   };
@@ -188,10 +195,15 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
     if (m) {
       const b = await body<{ data?: unknown; cols?: unknown; rows?: unknown }>(req);
       const ok = m[2] === "input" ? typeInConsole(m[1], b.data as string) : resizeConsole(m[1], Number(b.cols), Number(b.rows));
+      // Typing in a console is using that session: it moves to the front of the list.
+      const used = m[2] === "input" && ok ? monitor.snapshot?.sessions.find((s) => hostedName(s.tmux) === m![1]) : null;
+      if (used) noteUsed(used.sessionId);
       return send(res, 200, { ok, message: ok ? "Sent" : "That console is closed." });
     }
-    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename|move|model|effort|mode)$/.exec(p);
+    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename|move|model|effort|mode|place)$/.exec(p);
     if (m) {
+      const used = USED_BY.has(m[2]) ? monitor.snapshot?.sessions.find((s) => s.pid === Number(m![1])) : null;
+      if (used) noteUsed(used.sessionId);
       const out = await sessionAction(Number(m[1]), m[2], req);
       return send(res, out ? 200 : 404, out ?? { ok: false, message: "Unknown action" });
     }

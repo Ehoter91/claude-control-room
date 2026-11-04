@@ -17,6 +17,7 @@ export interface TranscriptState {
   aiTitle: string | null;
   agentName: string | null;
   lastPrompt: string | null;
+  lastPromptAt: number | null; // when you last sent the session a message
   prLink: { number: number; url: string; repo: string } | null;
   worktreePath: string | null;
   worktreeBranch: string | null;
@@ -47,6 +48,7 @@ export function emptyState(path: string): TranscriptState {
     aiTitle: null,
     agentName: null,
     lastPrompt: null,
+    lastPromptAt: null,
     prLink: null,
     worktreePath: null,
     worktreeBranch: null,
@@ -118,6 +120,31 @@ async function firstRead(state: TranscriptState, size: number): Promise<void> {
   }
   applyLines(state, buf.subarray(begin, end).toString("utf8").split("\n"));
   state.offset = start + end + 1;
+  // A long turn of tool output can push your last message out of that stretch. The list's order needs its time.
+  if (state.lastPromptAt === null && start + begin > 0) state.lastPromptAt = await lastPromptBefore(state.path, start + begin);
+}
+
+/** The time of your last message before byte `end`, reading backwards up to FIRST_READ_CAP more bytes. */
+async function lastPromptBefore(path: string, end: number): Promise<number | null> {
+  let start = end;
+  let carry = Buffer.alloc(0); // the end part of a line whose start is in the chunk before
+  while (start > 0 && end - start < FIRST_READ_CAP) {
+    const from = Math.max(0, start - CHUNK);
+    const buf = Buffer.concat([await readBytes(path, from, start), carry]);
+    start = from;
+    const nl = from > 0 ? buf.indexOf(0x0a) : -1;
+    carry = nl >= 0 ? buf.subarray(0, nl) : from > 0 ? buf : Buffer.alloc(0);
+    if (nl < 0 && from > 0) continue;
+    const lines = buf.subarray(nl + 1).toString("utf8").split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].includes('"type":"user"')) continue;
+      const e = parse(lines[i]);
+      if (!e || e.type !== "user" || e.isMeta || e.isSidechain || !userText(e)) continue;
+      const at = typeof e.timestamp === "string" ? Date.parse(e.timestamp) : NaN;
+      if (!Number.isNaN(at)) return at;
+    }
+  }
+  return null;
 }
 
 function countChat(buf: Buffer): number {
@@ -261,6 +288,8 @@ function applyUser(state: TranscriptState, e: Entry): void {
   if (said) {
     state.pending = [];
     state.chat.push({ role: "user", text: said, at: e.timestamp ?? null });
+    const at = typeof e.timestamp === "string" ? Date.parse(e.timestamp) : NaN;
+    if (!Number.isNaN(at)) state.lastPromptAt = Math.max(state.lastPromptAt ?? 0, at);
   }
 }
 

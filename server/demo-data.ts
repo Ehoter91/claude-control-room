@@ -394,6 +394,8 @@ function sessionOf(s: Seed, now: number): Session {
     cwd: git.root,
     startedAt,
     lastActivityAt: s.status === "busy" ? now : since,
+    lastUsedAt: Math.max(startedAt, since),
+    sortKey: Math.max(startedAt, since),
     activity: deriveActivity(file, transcript, now, INACTIVE_AFTER),
     summary: { headline: s.headline, now: s.now, source: "ai", updatedAt: since },
     firstPrompt: chat[0]?.text ?? null,
@@ -424,7 +426,7 @@ function sessionOf(s: Seed, now: number): Session {
 export function demoSnapshot(now: number, count = DEMO_DEFAULT_COUNT): Snapshot {
   const sessions = SEEDS.slice(0, Math.max(1, Math.min(count, SEEDS.length)))
     .map((s) => sessionOf(s, now))
-    .sort((a, b) => b.startedAt - a.startedAt);
+    .sort((a, b) => b.lastUsedAt - a.lastUsedAt || b.startedAt - a.startedAt);
   return {
     at: now,
     sessions,

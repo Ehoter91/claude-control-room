@@ -25,6 +25,8 @@ export interface State {
   busy: Record<string, boolean>; // "pid:action" while a request runs
   typeInto: number | null; // pid whose console takes the keyboard when it shows
   consoleView: ConsoleView;
+  drawerWidths: Record<string, number>; // dragged widths of the details panel, with a console and without one
+  consoleHeight: number | null; // dragged height of a console in its details; null fills the room
 }
 
 /** How a session's console shows: in its details, folded to its bar, or filling the window. */
@@ -67,6 +69,8 @@ let state: State = {
   busy: {},
   typeInto: null,
   consoleView: "normal",
+  drawerWidths: stored<Record<string, number>>("cr.drawerWidths", {}),
+  consoleHeight: stored<number | null>("cr.consoleHeight", null),
 };
 const listeners = new Set<() => void>();
 
