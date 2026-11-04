@@ -2909,3 +2909,130 @@ html.is-menubar body::before {
     transition-duration: 0.001s !important;
   }
 }
+
+/* ---------- console: the live terminal of a session that runs here ---------- */
+.drawer.is-wide {
+  width: min(1040px, 96vw);
+}
+.detail-console {
+  flex: 1;
+  min-height: 300px;
+  display: flex;
+  padding: 12px 22px 0;
+}
+.console {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 280px;
+  padding: 10px 4px 6px 12px;
+  border-radius: 13px;
+  border: 1px solid var(--line-2);
+  background: #0a0d13;
+  overflow: hidden;
+}
+.console:focus-within {
+  border-color: rgba(122, 162, 255, 0.45);
+}
+.console-term {
+  position: absolute;
+  inset: 10px 4px 6px 12px;
+}
+.console-note {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  background: rgba(10, 13, 19, 0.72);
+  pointer-events: none;
+}
+.console.is-ended .console-note {
+  pointer-events: auto;
+}
+.detail-body.is-compact {
+  flex: none;
+  max-height: 32%;
+  overflow-y: auto;
+  padding-bottom: 14px;
+}
+.detail-body.is-compact > .dl {
+  max-height: none;
+}
+
+/* ---------- moving a session here ---------- */
+.move-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 14px;
+  padding: 12px 14px;
+  border-radius: 13px;
+  border: 1px solid var(--line);
+  background: rgba(122, 162, 255, 0.06);
+}
+.move-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.move-text span {
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+.move-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+/* ---------- new session ---------- */
+.topbar-new {
+  margin-right: 4px;
+}
+.new-session {
+  width: min(620px, 100%);
+}
+.new-session.is-waiting {
+  width: min(1000px, 100%);
+}
+.new-console {
+  height: min(60vh, 560px);
+  display: flex;
+  margin-top: 14px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 16px;
+}
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.field-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.field-grow {
+  flex: 1;
+  min-width: 0;
+}
+.textarea {
+  height: auto;
+  padding: 9px 10px;
+  line-height: 1.45;
+  resize: vertical;
+}
+.field-warn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  color: var(--warn);
+  font-size: 12.5px;
+}

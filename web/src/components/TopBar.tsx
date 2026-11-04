@@ -1,4 +1,4 @@
-import { Bell, BellOff, ChevronDown, ChevronUp, Settings, Volume2, VolumeX, X } from "lucide-react";
+import { Bell, BellOff, ChevronDown, ChevronUp, Plus, Settings, Volume2, VolumeX, X } from "lucide-react";
 import { useState } from "react";
 import type { Snapshot } from "../../../shared/types.ts";
 import { playChime } from "../lib/alerts.ts";
@@ -87,6 +87,11 @@ export function TopBar({ snap }: { snap: Snapshot | null }) {
         >
           {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
         </IconButton>
+        {cfg && !VIEW.wallOnly && VIEW.sessionPid === null && (
+          <button type="button" className="btn btn-primary btn-sm topbar-new" data-tip="Start Claude Code in a folder (N)" data-tip-side="bottom" onClick={() => setState({ panel: "new" })}>
+            <Plus size={14} /> New session
+          </button>
+        )}
         <IconButton label="Settings" onClick={() => setState({ panel: "settings" })}>
           <Settings size={16} />
         </IconButton>

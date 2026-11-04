@@ -413,6 +413,7 @@ function sessionOf(s: Seed, now: number): Session {
     vscodeLinked: true,
     transcriptPath: null,
     tmux: null,
+    hosted: false,
     remoteUrl: s.remote ? `https://claude.ai/code/session_demo${s.pid}` : null,
   };
 }
@@ -432,7 +433,7 @@ export function demoSnapshot(now: number, count = DEMO_DEFAULT_COUNT): Snapshot 
     },
     account: { email: "you@example.com", orgName: "Acme", plan: "max", loggedIn: true },
     power: { sleepDisabled: true, passwordless: false },
-    setup: { statusLine: "installed", hooks: true, vscodeHelper: "connected", vscodeWindows: 3, ides: ["vscode", "cursor", "pycharm"], ghReady: true, shortcutReady: true },
+    setup: { statusLine: "installed", hooks: true, vscodeHelper: "connected", vscodeWindows: 3, ides: ["vscode", "cursor", "pycharm"], tmuxReady: true, ghReady: true, shortcutReady: true },
     settings: {
       notifications: true,
       sounds: true,

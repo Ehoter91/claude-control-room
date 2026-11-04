@@ -125,6 +125,7 @@ export interface Session {
   vscodeLinked: boolean; // the VS Code helper can reach this terminal
   transcriptPath: string | null;
   tmux: string | null;
+  hosted: boolean; // runs in Control Room's own tmux, so its console works here
   remoteUrl: string | null; // claude.ai link while Remote Control is on
 }
 
@@ -157,6 +158,7 @@ export interface SetupState {
   vscodeHelper: "connected" | "outdated" | "installed" | "missing"; // outdated = connected, but too old to rename tabs
   vscodeWindows: number;
   ides: IdeId[]; // installed on this Mac
+  tmuxReady: boolean; // needed to start sessions here
   ghReady: boolean;
   shortcutReady: boolean;
 }

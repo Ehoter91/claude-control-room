@@ -81,6 +81,8 @@ export async function startDemo(opts: { port?: number; sessions?: number } = {})
         update(pid, () => ({ name, nameSource: "tab" as const }));
         return { ok: true, message: `Renamed to “${name}”` };
       }
+      case "move":
+        return { ok: false, message: "In the app, this continues the session in a console in Control Room." };
     }
     return null;
   }
@@ -114,12 +116,14 @@ export async function startDemo(opts: { port?: number; sessions?: number } = {})
     }
     if (req.method !== "POST") return send(res, 404, { ok: false, message: "Not found" });
 
-    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename)$/.exec(p);
+    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename|move)$/.exec(p);
     if (m) {
       const out = await sessionAction(Number(m[1]), m[2], req);
       return send(res, out ? 200 : 404, out ?? { ok: false, message: "Unknown action" });
     }
     switch (p) {
+      case "/api/sessions/new":
+        return send(res, 200, { ok: false, message: "In the app, this starts Claude Code in the folder you pick, with a console here." });
       case "/api/settings": {
         const b = await body<Partial<Settings>>(req);
         const patch: Partial<Settings> = {};

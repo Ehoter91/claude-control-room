@@ -1,7 +1,7 @@
 import { ArrowUpRight, Check, CircleCheck, Coffee, FolderGit2, Moon, RefreshCw, Sparkles, UserRound } from "lucide-react";
 import type { RateWindow, Session, Snapshot } from "../../../shared/types.ts";
 import { duration, plural, resetLabel } from "../lib/format.ts";
-import { act, needsYou, remember, setState, useStore, type Filter } from "../store.ts";
+import { act, needsYou, openSession, remember, setState, useStore, type Filter } from "../store.ts";
 import { openUrl, PrChip } from "./Monitor.tsx";
 import { Meter, StatusOrb, Toggle, useNow } from "./Primitives.tsx";
 
@@ -96,7 +96,7 @@ function AttentionCard({ sessions }: { sessions: Session[] }) {
                     className="btn btn-ghost btn-sm"
                     onClick={(e) => {
                       e.stopPropagation();
-                      void act(`${s.pid}:focus`, `/api/sessions/${s.pid}/focus`, {}, true);
+                      openSession(s);
                     }}
                   >
                     Open

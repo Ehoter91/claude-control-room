@@ -23,6 +23,7 @@ export interface NativeBridge {
   showMenu(kind: "more" | "walls"): void;
   loginItem(): Promise<boolean>;
   setLoginItem(on: boolean): Promise<boolean>;
+  pickFolder(): Promise<string | null>;
 }
 
 export const native: NativeBridge | null = (window as unknown as { controlRoom?: NativeBridge }).controlRoom ?? null;

@@ -1,9 +1,11 @@
+import { existsSync } from "node:fs";
 import { openTarget } from "../shared/ides.ts";
 import type { ActionResult, ClosePlan, CloseRequest, Session, WorktreeReport } from "../shared/types.ts";
 import { endClaim, forgetClaims, repoClaims } from "./claims.ts";
 import { settings } from "./config.ts";
 import { git, listWorktrees } from "./git.ts";
 import { prForBranch, type PrRow } from "./github.ts";
+import { hostedName, hostedSessions, startSession, tmux, tmuxReady } from "./hosted.ts";
 import { openInIde } from "./ide.ts";
 import type { Monitor } from "./monitor.ts";
 import { readSessionFiles } from "./monitor.ts";
@@ -29,7 +31,9 @@ async function sendKeys(s: Session, text: string, tmuxKey: string | null): Promi
   if (s.tmux) {
     const pane = s.tmux.split(".").pop() ?? s.tmux;
     const args = tmuxKey ? ["send-keys", "-t", pane, tmuxKey] : ["send-keys", "-t", pane, "-l", text];
-    const out = await run("tmux", args, { timeoutMs: 5_000 });
+    // A session started here lives on Control Room's own tmux server; pane ids like %0 count per server. Its name
+    // decides, not the last list from tmux, so a key never lands in a pane of the same id on your own tmux.
+    const out = hostedName(s.tmux) ? await tmux(args) : await run("tmux", args, { timeoutMs: 5_000 });
     return { ok: out.ok, message: out.ok ? "Sent" : out.stderr.trim() };
   }
   if (s.vscodeLinked) {
@@ -119,6 +123,8 @@ export async function focusSession(monitor: Monitor, pid: number): Promise<Actio
   const s = find(monitor, pid);
   if (!s) return { ok: false, message: "That session is gone." };
   const target = openTarget(s, settings().ide);
+  // The page opens the console itself; this answers a menu or a keyboard shortcut that asked the server.
+  if (target.kind === "console") return { ok: true, message: "Its console is in Control Room." };
   if (target.kind === "tmux") {
     launch("open", ["-a", "Terminal"]);
     return { ok: true, message: `It runs in tmux (${(s.tmux ?? "").split(":")[0]}).` };
@@ -155,6 +161,70 @@ export async function renameSession(monitor: Monitor, pid: number, raw: unknown)
   }
   await monitor.tick();
   return { ok: true, message: name ? `Renamed to “${name}”` : "Name cleared" };
+}
+
+/** The pid of the Claude Code that runs in hosted tmux session `name`, once Claude Code has written its session file. */
+async function hostedPid(name: string, waitMs: number): Promise<number | null> {
+  for (const until = Date.now() + waitMs; ; await sleep(250)) {
+    const f = (await readSessionFiles()).find((x) => hostedName(x.tmux) === name);
+    if (f) return f.pid;
+    if (Date.now() > until) return null;
+  }
+}
+
+/** Starts Claude Code in Control Room, in a folder of your choice, with an optional first message. */
+export async function newSession(monitor: Monitor, b: { cwd?: unknown; prompt?: unknown }): Promise<ActionResult & { pid?: number; name?: string }> {
+  const prompt = typeof b.prompt === "string" && b.prompt.trim() ? b.prompt.trim() : null;
+  const r = await startSession({ cwd: typeof b.cwd === "string" ? b.cwd : "", prompt });
+  if (!r.ok || !r.name) return r;
+  // Claude Code writes its session file within a second or two; a longer wait means it asks something first.
+  const pid = await hostedPid(r.name, 5_000);
+  if (!pid && (await hostedSessions())?.has(r.name) === false) return { ok: false, message: STOPPED_AT_START };
+  await monitor.fresh();
+  return pid ? { ok: true, message: "Started", pid, name: r.name } : { ok: true, message: "Claude Code asks something first. Answer it in the console.", name: r.name };
+}
+
+const STOPPED_AT_START = "Claude Code stopped right after it started. Run claude in that folder in a terminal once to see why.";
+const moving = new Set<number>();
+
+/**
+ * Moves a session from another terminal into Control Room: stops it, then continues the same conversation here with
+ * `claude --resume`. Only an idle session moves, so no turn is cut off.
+ */
+export async function moveSession(monitor: Monitor, pid: number): Promise<ActionResult & { pid?: number; name?: string }> {
+  const s = find(monitor, pid);
+  if (!s) return { ok: false, message: "That session is gone." };
+  if (s.hosted) return { ok: true, message: "It already runs in Control Room.", pid };
+  // A second click, or a second window, must not resume the same conversation twice.
+  if (moving.has(pid)) return { ok: false, message: "It is moving already." };
+  moving.add(pid);
+  try {
+    const file = (await readSessionFiles()).find((x) => x.pid === pid);
+    if (!file || file.status !== "idle" || !["idle", "inactive"].includes(s.activity.kind)) {
+      return { ok: false, message: "Wait until it is idle. Moving restarts Claude Code, so a running turn or background task would stop." };
+    }
+    // Everything a restart here needs is checked before Claude Code stops there.
+    if (!tmuxReady()) return { ok: false, message: "Control Room needs tmux for this. Install it: brew install tmux" };
+    if (!existsSync(file.cwd)) return { ok: false, message: `Its folder is gone: ${file.cwd}` };
+    if (!(await stopProcess(pid))) return { ok: false, message: "Claude did not stop, so the session stays where it is." };
+    const resumeHint = `To continue it yourself, run in ${file.cwd}: claude --resume ${s.sessionId}`;
+    // Claude Code keeps a conversation under the folder it started in, so it continues from there.
+    const r = await startSession({ cwd: file.cwd, resume: s.sessionId });
+    if (!r.ok || !r.name) return { ok: false, message: `It stopped, but did not start here: ${r.message} ${resumeHint}` };
+    const pidHere = await hostedPid(r.name, 15_000);
+    if (!pidHere && (await hostedSessions())?.has(r.name) === false) return { ok: false, message: `It stopped, but did not start here. ${resumeHint}` };
+    // A VS Code tab's name stays with the tab, so it comes along as a name saved here.
+    if (pidHere && (s.nameSource === "tab" || s.nameSource === "saved")) {
+      const moved = (await readSessionFiles()).find((x) => x.pid === pidHere);
+      if (moved && (s.nameSource === "tab" || moved.sessionId !== s.sessionId)) await saveName(moved.sessionId, s.name).catch(() => {});
+    }
+    await monitor.fresh();
+    return pidHere
+      ? { ok: true, message: "Moved to Control Room. Its old terminal tab can be closed.", pid: pidHere, name: r.name }
+      : { ok: true, message: "Moved. It shows up here as soon as Claude Code is ready.", name: r.name };
+  } finally {
+    moving.delete(pid);
+  }
 }
 
 export function openUrl(url: string): ActionResult {

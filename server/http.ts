@@ -27,9 +27,16 @@ export function send(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
+const MAX_BODY = 8 * 1024 * 1024; // a big paste into a console fits; anything larger is not ours
+
 export async function body<T>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(c as Buffer);
+  let size = 0;
+  for await (const c of req) {
+    size += (c as Buffer).length;
+    if (size > MAX_BODY) throw new Error("Request too large");
+    chunks.push(c as Buffer);
+  }
   const raw = Buffer.concat(chunks).toString("utf8");
   return (raw ? JSON.parse(raw) : {}) as T;
 }
