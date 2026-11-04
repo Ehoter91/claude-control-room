@@ -20,7 +20,7 @@ import { type MouseEvent, useRef, useState } from "react";
 import type { PullRequest, Session } from "../../../shared/types.ts";
 import { duration } from "../lib/format.ts";
 import { popoutSession } from "../lib/native.ts";
-import { act, api, setState, useOpenName, useStore } from "../store.ts";
+import { act, api, openSession, setState, useOpenName, useStore } from "../store.ts";
 import { IconButton, Ring, StatusOrb, useNow } from "./Primitives.tsx";
 
 export function openUrl(url: string): void {
@@ -139,7 +139,7 @@ export function ApprovalCard({ s }: { s: Session }) {
           Reject
         </button>
         {!reachable && (
-          <button type="button" className="btn btn-link" onClick={() => void act(`${s.pid}:focus`, `/api/sessions/${s.pid}/focus`)}>
+          <button type="button" className="btn btn-link" onClick={() => openSession(s)}>
             Open in {openIn}
           </button>
         )}
@@ -180,7 +180,7 @@ export function QuestionCard({ s }: { s: Session }) {
         </div>
       ) : (
         <div className="ask-buttons">
-          <button type="button" className="btn btn-approve" onClick={() => void act(`${s.pid}:focus`, `/api/sessions/${s.pid}/focus`)}>
+          <button type="button" className="btn btn-approve" onClick={() => openSession(s)}>
             Answer in {openIn}
           </button>
         </div>
@@ -317,7 +317,7 @@ export function Monitor({ s, index, selected }: { s: Session; index: number; sel
         {renaming ? <NameEditor s={s} className="mon-title" onDone={() => setRenaming(false)} /> : <h3 className="mon-title">{s.name}</h3>}
         <div className="mon-actions">
           <RenameButton s={s} onClick={() => setRenaming(true)} />
-          <IconButton label={`Open in ${openIn}`} onClick={() => void act(`${s.pid}:focus`, `/api/sessions/${s.pid}/focus`, {}, true)}>
+          <IconButton label={`Open in ${openIn}`} onClick={() => openSession(s)}>
             <CodeXml size={15} />
           </IconButton>
           <IconButton label="Pop out to its own window" onClick={() => popoutSession(s.pid)}>

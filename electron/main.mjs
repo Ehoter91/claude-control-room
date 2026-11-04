@@ -1,5 +1,5 @@
 // Control Room as a Mac app: one server in this process, a menu bar icon with a quick panel, the dashboard, wall windows per display.
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, screen, shell, Tray } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, screen, shell, Tray } from "electron";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -377,6 +377,11 @@ ipcMain.on("cr:menu", (e, kind) => {
   menu.popup({ window: senderWindow(e) ?? undefined });
 });
 ipcMain.handle("cr:login-item", () => app.getLoginItemSettings().openAtLogin);
+ipcMain.handle("cr:pick-folder", async (e) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  const r = await dialog.showOpenDialog(win, { title: "Start a session in", buttonLabel: "Start here", properties: ["openDirectory"] });
+  return r.canceled ? null : (r.filePaths[0] ?? null);
+});
 ipcMain.handle("cr:set-login-item", (_e, on) => {
   app.setLoginItemSettings({ openAtLogin: Boolean(on) });
   return app.getLoginItemSettings().openAtLogin;

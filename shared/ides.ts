@@ -46,15 +46,19 @@ export function ideName(id: IdeId): string {
   return IDES.find((i) => i.id === id)?.name ?? id;
 }
 
-/** Where "Open in …" takes a session: tmux to Terminal, a session in an IDE's terminal to that IDE, the rest to the Settings choice. */
-export type OpenTarget = { kind: "tmux" } | { kind: "ide"; ide: IdeId };
+/**
+ * Where "Open in …" takes a session: a session that runs in Control Room to its console, tmux to Terminal, a session
+ * in an IDE's terminal to that IDE, the rest to the Settings choice.
+ */
+export type OpenTarget = { kind: "console" } | { kind: "tmux" } | { kind: "ide"; ide: IdeId };
 
-export function openTarget(s: { tmux: string | null; ide: IdeId | null }, chosen: IdeId): OpenTarget {
+export function openTarget(s: { tmux: string | null; ide: IdeId | null; hosted?: boolean }, chosen: IdeId): OpenTarget {
+  if (s.hosted) return { kind: "console" };
   if (s.tmux) return { kind: "tmux" };
   return { kind: "ide", ide: s.ide ?? chosen };
 }
 
 /** The word after "Open in", "Answer in" and "Reply in". */
 export function targetName(t: OpenTarget): string {
-  return t.kind === "tmux" ? "Terminal" : ideName(t.ide);
+  return t.kind === "console" ? "console" : t.kind === "tmux" ? "Terminal" : ideName(t.ide);
 }

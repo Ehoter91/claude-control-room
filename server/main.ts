@@ -12,6 +12,8 @@ import {
   closePlan,
   closeSession,
   focusSession,
+  moveSession,
+  newSession,
   openFolder,
   openUrl,
   pruneWorktrees,
@@ -23,6 +25,7 @@ import { repoClaims } from "./claims.ts";
 import { loadSettings, saveSettings, settings } from "./config.ts";
 import { listWorktrees } from "./git.ts";
 import { allPrs, checkGh } from "./github.ts";
+import { resizeConsole, stopConsole, typeInConsole, watchConsole } from "./console.ts";
 import { body, DEV_ORIGINS, DIST, refusal, send, serveStatic } from "./http.ts";
 import { Monitor } from "./monitor.ts";
 import { APP_DIR, BRIDGE_FILE, TAP_DIR } from "./paths.ts";
@@ -79,6 +82,8 @@ export async function startServer(opts: { port?: number; dev?: boolean } = {}): 
         return startRemoteControl(monitor, pid);
       case "rename":
         return renameSession(monitor, pid, (await body<{ name?: unknown }>(req)).name);
+      case "move":
+        return moveSession(monitor, pid);
     }
     return null;
   };
@@ -124,6 +129,35 @@ export async function startServer(opts: { port?: number; dev?: boolean } = {}): 
       if (m[2] === "chat") return send(res, 200, { chat: monitor.transcriptOf(pid)?.chat ?? [] });
       return send(res, 200, await closePlan(monitor, pid));
     }
+    m = /^\/api\/console\/(cr-[0-9a-f]{8})\/stream$/.exec(p);
+    if (req.method === "GET" && m) {
+      res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive" });
+      const event = (name: string, data: string) => res.write(`event: ${name}\ndata: ${data}\n\n`);
+      const cols = Number(url.searchParams.get("cols") ?? 100);
+      const rows = Number(url.searchParams.get("rows") ?? 30);
+      const off = watchConsole(m[1], cols, rows, (e) => {
+        if (res.writableEnded) return;
+        // A window that stopped reading (asleep, or far behind) is dropped; it connects again and starts from a fresh screen.
+        if (res.writableLength > 8 * 1024 * 1024) return void res.end();
+        if (e.type === "data") return event("data", e.data.toString("base64"));
+        if (e.type === "size") return event("size", JSON.stringify({ cols: e.cols, rows: e.rows }));
+        if (e.type === "reset") {
+          return event("reset", JSON.stringify({ data: e.data.toString("base64"), x: e.x, y: e.y, cursor: e.cursor, cols: e.cols, rows: e.rows }));
+        }
+        if (e.type === "exit") event("exit", "{}");
+        res.end(); // "lost" ends the stream without "exit", so the page connects again
+      });
+      if (!off) {
+        event("exit", "{}");
+        return void res.end();
+      }
+      const ping = setInterval(() => res.write(": ping\n\n"), 15_000);
+      req.on("close", () => {
+        off();
+        clearInterval(ping);
+      });
+      return;
+    }
     if (req.method === "GET" && p === "/api/worktrees") {
       const repo = repoOf(url.searchParams.get("repo") ?? undefined);
       if (!repo) return send(res, 404, { ok: false, message: "Unknown repo" });
@@ -131,12 +165,25 @@ export async function startServer(opts: { port?: number; dev?: boolean } = {}): 
     }
     if (req.method !== "POST") return send(res, 404, { ok: false, message: "Not found" });
 
-    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename)$/.exec(p);
+    m = /^\/api\/console\/(cr-[0-9a-f]{8})\/(input|resize|stop)$/.exec(p);
+    if (m && m[2] === "stop") {
+      const ok = await stopConsole(m[1]);
+      await monitor.fresh();
+      return send(res, 200, { ok, message: ok ? "Stopped" : "It had stopped already." });
+    }
+    if (m) {
+      const b = await body<{ data?: unknown; cols?: unknown; rows?: unknown }>(req);
+      const ok = m[2] === "input" ? typeInConsole(m[1], b.data as string) : resizeConsole(m[1], Number(b.cols), Number(b.rows));
+      return send(res, 200, { ok, message: ok ? "Sent" : "That console is closed." });
+    }
+    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename|move)$/.exec(p);
     if (m) {
       const out = await sessionAction(Number(m[1]), m[2], req);
       return send(res, out ? 200 : 404, out ?? { ok: false, message: "Unknown action" });
     }
     switch (p) {
+      case "/api/sessions/new":
+        return send(res, 200, await newSession(monitor, await body<{ cwd?: unknown; prompt?: unknown }>(req)));
       case "/api/open": {
         const b = await body<{ url?: string; folder?: string }>(req);
         if (b.url) return send(res, 200, openUrl(b.url));

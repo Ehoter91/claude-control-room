@@ -16,4 +16,5 @@ contextBridge.exposeInMainWorld("controlRoom", {
   showMenu: (kind) => ipcRenderer.send("cr:menu", kind),
   loginItem: () => ipcRenderer.invoke("cr:login-item"),
   setLoginItem: (on) => ipcRenderer.invoke("cr:set-login-item", on),
+  pickFolder: () => ipcRenderer.invoke("cr:pick-folder"),
 });

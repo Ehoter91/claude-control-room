@@ -1,9 +1,10 @@
 import { useSyncExternalStore } from "react";
+import { hostedName } from "../../shared/hosted.ts";
 import { openTarget, targetName } from "../../shared/ides.ts";
 import type { ActionResult, Session, Snapshot, StatusKind } from "../../shared/types.ts";
 
 export type Filter = "all" | "attention" | "working" | "idle" | "inactive";
-export type Panel = "settings" | "worktrees" | null;
+export type Panel = "settings" | "worktrees" | "new" | null;
 
 export interface Toast {
   id: number;
@@ -22,6 +23,7 @@ export interface State {
   overviewCollapsed: boolean;
   toasts: Toast[];
   busy: Record<string, boolean>; // "pid:action" while a request runs
+  typeInto: number | null; // pid whose console takes the keyboard when it shows
 }
 
 const params = new URLSearchParams(location.search);
@@ -31,7 +33,7 @@ export const VIEW = {
   sessionPid: params.get("session") ? Number(params.get("session")) : null,
 };
 
-function stored<T>(key: string, fallback: T): T {
+export function stored<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
     return raw === null ? fallback : (JSON.parse(raw) as T);
@@ -59,6 +61,7 @@ let state: State = {
   overviewCollapsed: VIEW.wallOnly || stored("cr.overviewCollapsed", false),
   toasts: [],
   busy: {},
+  typeInto: null,
 };
 const listeners = new Set<() => void>();
 
@@ -85,6 +88,17 @@ export function useStore<T>(select: (s: State) => T): T {
 /** Where "Open in …" takes this session, by name: "PyCharm", "VS Code" or "Terminal". The server decides the same way. */
 export function useOpenName(s: Session): string {
   return useStore((st) => targetName(openTarget(s, st.snapshot?.settings.ide ?? "vscode")));
+}
+
+/** Opens the session where you can type into it: one that runs here in its console, any other in its own terminal. */
+export function openSession(s: Session): void {
+  if (s.hosted) setState({ drawer: s.pid, selected: s.pid, typeInto: s.pid });
+  else void act(`${s.pid}:focus`, `/api/sessions/${s.pid}/focus`, {}, true);
+}
+
+/** The tmux session behind a session that runs here, from Claude Code's "name:@window.%pane". */
+export function consoleName(s: Session): string | null {
+  return s.hosted ? hostedName(s.tmux) : null;
 }
 
 let toastId = 0;

@@ -1,12 +1,15 @@
-import { CodeXml, FolderOpen, GitPullRequest, PictureInPicture2, SquareKanban, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowDownToLine, CodeXml, FolderOpen, GitPullRequest, PictureInPicture2, SquareKanban, X } from "lucide-react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ideName } from "../../../shared/ides.ts";
 import type { ChatLine, Session } from "../../../shared/types.ts";
 import { duration, folderName, money, startedLabel } from "../lib/format.ts";
 import { popoutSession } from "../lib/native.ts";
-import { act, api, setState, useOpenName } from "../store.ts";
+import { act, api, consoleName, setState, useOpenName, useStore } from "../store.ts";
 import { ApprovalCard, NameEditor, openUrl, PrChip, QuestionCard, RemoteButton, RenameButton } from "./Monitor.tsx";
 import { StatusOrb, useNow } from "./Primitives.tsx";
+
+// xterm.js is big; only a window that shows a console loads it.
+const Console = lazy(() => import("./Console.tsx"));
 
 function useChat(pid: number): ChatLine[] {
   const [chat, setChat] = useState<ChatLine[]>([]);
@@ -62,6 +65,50 @@ function Conversation({ pid }: { pid: number }) {
   );
 }
 
+/** For a session in another terminal: continue the same conversation in Control Room, where its console works. */
+function MoveHere({ s }: { s: Session }) {
+  const [asking, setAsking] = useState(false);
+  const busy = useStore((st) => !!st.busy[`${s.pid}:move`]);
+  const tmuxReady = useStore((st) => st.snapshot?.setup.tmuxReady ?? false);
+  const idle = s.activity.kind === "idle" || s.activity.kind === "inactive";
+  const where = s.ide ? `its ${ideName(s.ide)} tab` : "its terminal";
+  const move = async () => {
+    const r = (await act(`${s.pid}:move`, `/api/sessions/${s.pid}/move`)) as { ok: boolean; pid?: number };
+    setAsking(false);
+    if (r.ok && r.pid) setState({ drawer: r.pid, selected: r.pid, typeInto: r.pid });
+  };
+  return (
+    <div className="move-card">
+      <div className="move-text">
+        <b>Type to it from here</b>
+        <span>
+          {!tmuxReady
+            ? "Control Room runs sessions in tmux. Install it to move this one here: brew install tmux"
+            : asking
+            ? `Claude Code stops in ${where} and continues the same conversation here, in a console. Nothing is lost.`
+            : idle
+              ? `Move it to Control Room to get a console here. Then ${where} is no longer needed.`
+              : "It can move to Control Room once it is idle."}
+        </span>
+      </div>
+      {asking ? (
+        <div className="move-buttons">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAsking(false)}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-primary btn-sm" disabled={busy || !idle} onClick={() => void move()}>
+            {busy ? "Moving…" : "Move"}
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="btn btn-ghost btn-sm" disabled={!idle || !tmuxReady} onClick={() => setAsking(true)}>
+          <ArrowDownToLine size={14} /> Move here
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="dl-row">
@@ -78,7 +125,15 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
   const [showClaims, setShowClaims] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const openIn = useOpenName(s);
-  const where = s.tmux ? `tmux ${s.tmux.split(":")[0]}` : s.ide ? `${ideName(s.ide)} terminal${s.vscodeLinked ? " (linked)" : ""}` : "Terminal";
+  const tmuxName = consoleName(s);
+  const typeInto = useStore((st) => st.typeInto === s.pid);
+  const where = tmuxName
+    ? "Control Room"
+    : s.tmux
+      ? `tmux ${s.tmux.split(":")[0]}`
+      : s.ide
+        ? `${ideName(s.ide)} terminal${s.vscodeLinked ? " (linked)" : ""}`
+        : "Terminal";
   return (
     <div className={`detail detail-${variant} st-${a.kind}`}>
       <div className="detail-head">
@@ -105,9 +160,11 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
       {a.kind === "question" && <QuestionCard s={s} />}
 
       <div className="detail-actions">
-        <button type="button" className="btn btn-primary" onClick={() => void act(`${s.pid}:focus`, `/api/sessions/${s.pid}/focus`, {}, true)}>
-          <CodeXml size={15} /> Open in {openIn}
-        </button>
+        {!tmuxName && (
+          <button type="button" className="btn btn-primary" onClick={() => void act(`${s.pid}:focus`, `/api/sessions/${s.pid}/focus`, {}, true)}>
+            <CodeXml size={15} /> Open in {openIn}
+          </button>
+        )}
         <RemoteButton s={s} look="button" />
         {s.pr && (
           <button type="button" className="btn btn-ghost" onClick={() => openUrl(s.pr!.url)}>
@@ -132,7 +189,15 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
         </button>
       </div>
 
-      <div className="detail-body">
+      {tmuxName && (
+        <div className="detail-console">
+          <Suspense fallback={<div className="console" />}>
+            <Console name={tmuxName} autoFocus={variant === "popout" || typeInto} onFocused={() => typeInto && setState({ typeInto: null })} />
+          </Suspense>
+        </div>
+      )}
+
+      <div className={`detail-body ${tmuxName ? "is-compact" : ""}`}>
         <dl className="dl">
           <Row label="Repository">
             {s.repoName}
@@ -193,8 +258,13 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
           </Row>
         </dl>
 
-        <h4 className="detail-section">Conversation</h4>
-        <Conversation pid={s.pid} />
+        {!tmuxName && (
+          <>
+            <MoveHere s={s} />
+            <h4 className="detail-section">Conversation</h4>
+            <Conversation pid={s.pid} />
+          </>
+        )}
       </div>
     </div>
   );

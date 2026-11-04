@@ -34,6 +34,7 @@ No more searching through terminal tabs.
 ## What you get
 
 - 🔍 **It finds every session.** Start `claude` in any terminal, and it shows up a moment later.
+- ⌨️ **No terminal needed.** Start a session here with **New session**, and type to it in its console in the dashboard.
 - 🚦 **Live status in plain words:** working, needs your approval, asked you a question, waiting for your reply, idle, inactive.
 - ✅ **Approve, reject and answer** from the dashboard or from the menu bar. You see the exact command first.
 - 📱 **Take a session to your phone.** Click **rc** on its tile, and the session shows up in the Claude app. It keeps running on your Mac.
@@ -89,6 +90,19 @@ Below it, each session is a tile, like a monitor on a wall. Every tile has three
 An approval shows the exact command. A question shows its options as buttons.
 One click sends your answer to the right terminal.
 Right before it presses a key, Control Room checks the session again, so an old card can never approve the wrong thing.
+
+### Start and type here
+
+Click **New session** at the top, or press `N`. Pick a folder, add a first message if you like, and click **Start session**.
+Claude Code starts in Control Room, and its details open with a live console.
+The console is the session's real terminal: type messages, slash commands, `Esc`, `Ctrl+C`, arrows, and paste, as in any terminal tab.
+`Shift+Enter` starts a new line in your message.
+
+A session started here keeps running when you quit Control Room. It is back in its console when the app opens again.
+Close it with **Close…**, or type `/exit` in its console.
+
+A session that runs in another terminal, like PyCharm's, shows **Move here** once it is idle.
+Control Room stops it there and continues the same conversation here, with `claude --resume`. Then its old terminal tab is no longer needed.
 
 ### Take it with you
 
@@ -169,6 +183,7 @@ It deletes folders only. Your branches stay, on GitHub and on your Mac.
 - [Node.js](https://nodejs.org) 22 or newer.
 - [Claude Code](https://github.com/anthropics/claude-code) (the `claude` command).
 - Optional: the [GitHub CLI](https://cli.github.com) `gh`, signed in, for pull request status.
+- Optional: [tmux](https://github.com/tmux/tmux), to start sessions and type to them in Control Room: `brew install tmux`.
 - Optional: [VS Code](https://code.visualstudio.com), to jump to a session's terminal and to answer from the dashboard.
   **Open in** also works with Cursor, PyCharm, IntelliJ IDEA, WebStorm and Zed. A session opens in the IDE whose terminal runs it.
   Sessions in other terminals open their folder in the IDE you pick in **Settings → Open other sessions in**.
@@ -250,6 +265,8 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 | Put the wall on another screen | Click **Wall on…** in the panel, or **Wall on display** in the dashboard. |
 | Watch one session on its own | Click the pop-out button on its tile. |
 | Continue a session on your phone | Click **rc** on its tile. Then open the Claude app and tap **Code**. |
+| Start a session and type to it | Click **New session**, pick a folder, click **Start session**. Type in its console. |
+| Stop using a terminal for a session | Open its details and click **Move here**, once it is idle. |
 | Rename a session | Click ✏️ on its tile or in its details, type the name, press Enter or click elsewhere. Its VS Code tab gets the name too. |
 | Move the icon | Hold ⌘ and drag the icon along the menu bar. |
 | Quit | Right-click the icon and choose **Quit**. |
@@ -263,7 +280,8 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 |---|---|
 | `1` – `9` | Select a tile |
 | `←` `→` | Move between tiles |
-| `↵` | Open the selected session in its IDE |
+| `N` | Start a new session |
+| `↵` | Open the selected session: its console, or its IDE |
 | `Space` | Show or hide its details |
 | `A` / `R` | Approve or reject |
 | `P` | Open its pull request |
@@ -307,6 +325,10 @@ the plain-English summary, the branch, and last the folder.
 **Rename** asks the VS Code helper to rename the tab, the same as **Rename** in VS Code. It types nothing into the session.
 For a session outside VS Code, the name goes to `~/.claude-control-room/names.json`, by session id.
 
+**New session** runs `claude` in a tmux server of Control Room's own (`tmux -L control-room`), through your login shell, so it gets the same PATH and variables as a terminal tab.
+Your own tmux and its config stay untouched. To look at these sessions from a terminal: `tmux -L control-room ls`.
+The console is a tmux control-mode client: it streams the session's output to the page and sends your keys with `send-keys`.
+
 </details>
 
 <details>
@@ -318,6 +340,8 @@ For a session outside VS Code, the name goes to `~/.claude-control-room/names.js
 - It checks the `Host` and `Origin` of every request. Every action also needs a header that a web page from another site cannot send.
 - Approve, Reject and **rc** read the session's status again right before they press a key. **rc** never types into a session that is asking you something.
 - **Rename** changes only the VS Code tab, or for other terminals `~/.claude-control-room/names.json`. It never types into the session.
+- A console types only what you type in it. It reaches only the sessions Control Room started, on its own tmux server.
+- **Move here** works only on an idle session, so it never cuts off a turn. The conversation continues from Claude Code's own transcript.
 - Shortcut tokens stay in `~/.claude-control-room/config.json`. The page only ever sees their last four characters.
 - The only calls that leave your Mac are: GitHub, through your own `gh`; Shortcut, only if you add a token; and your own `claude` command, for your account status and the short summaries.
 - After **rc**, Claude Code itself shares that session with your claude.ai account, as `/remote-control` always does. Control Room sends nothing there.
@@ -344,6 +368,15 @@ The dashboard needs a way to type into the session's terminal. Install the VS Co
 **Rename is grey, or does not work.**
 - *Grey:* a session in a VS Code terminal needs the VS Code helper, because the name goes on its tab.
 - *"Update the VS Code helper first":* click **Settings → VS Code helper → Update**. Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep running.
+
+**New session says it needs tmux.**
+Install it with `brew install tmux`, then click **New session** again.
+
+**A new session asks something first.**
+In a folder Claude Code has not seen before, it asks whether you trust the folder. Answer it in the console in the dialog. The session opens once it starts.
+
+**Move here is grey.**
+The session is busy, asking you something, or running a background task. Move it once it is idle.
 
 **An approval card shows no command.**
 That session started before you connected Claude Code. Sessions you start after connecting show everything.

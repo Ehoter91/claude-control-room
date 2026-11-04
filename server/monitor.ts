@@ -9,10 +9,11 @@ import { claimsOf, repoClaims } from "./claims.ts";
 import { publicSettings, settings } from "./config.ts";
 import { gitInfo } from "./git.ts";
 import { ghReady, prByNumber, prForBranch, refreshRepo } from "./github.ts";
+import { hostedName, hostedSessions, tmuxReady } from "./hosted.ts";
 import { ideOf, installedIdes } from "./ide.ts";
 import { CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, SUMMARIZER_CWD } from "./paths.ts";
 import { powerState } from "./power.ts";
-import { basename, isClaudeComm, processTable, type ProcRow } from "./proc.ts";
+import { basename, isClaudeComm, processTable, sleep, type ProcRow } from "./proc.ts";
 import { bridgeIdOf, remoteUrl } from "./remote.ts";
 import { findStoryId, shortcutReady, story as storyFor } from "./shortcut.ts";
 import { defaultEffort, latestUsage, readPermission, readTap, statusLineState } from "./statusline.ts";
@@ -138,6 +139,7 @@ export class Monitor {
   private ticking = false;
   procs = new Map<number, ProcRow>();
   files = new Map<number, SessionFile>();
+  private hosted = new Set<string>(); // tmux sessions on Control Room's own server
 
   subscribe(fn: (s: Snapshot) => void): () => void {
     this.listeners.add(fn);
@@ -153,6 +155,12 @@ export class Monitor {
     return !!p && isClaudeComm(p.comm);
   };
 
+  /** A tick that starts after now, so an action's result is in the snapshot it returns with. */
+  async fresh(): Promise<void> {
+    while (this.ticking) await sleep(50);
+    await this.tick();
+  }
+
   async tick(): Promise<void> {
     if (this.ticking) return;
     this.ticking = true;
@@ -167,6 +175,9 @@ export class Monitor {
     const cfg = settings();
     const [files, procs] = await Promise.all([readSessionFiles(), processTable()]);
     this.procs = procs;
+    // Asked only while some session runs there; when tmux can't answer, the last answer stands, so a console stays open.
+    if (files.some((f) => hostedName(f.tmux))) this.hosted = (await hostedSessions()) ?? this.hosted;
+    else this.hosted = new Set();
     if (Date.now() - this.effortReadAt > 60_000) {
       this.effortDefault = await defaultEffort();
       this.effortReadAt = Date.now();
@@ -197,6 +208,7 @@ export class Monitor {
         vscodeHelper: helperState(),
         vscodeWindows: windows,
         ides: installedIdes(),
+        tmuxReady: tmuxReady(),
         ghReady: ghReady(),
         shortcutReady: shortcutReady(),
       },
@@ -333,6 +345,7 @@ export class Monitor {
       vscodeLinked: windowFor(shellPid) !== null,
       transcriptPath: path,
       tmux: f.tmux,
+      hosted: this.hosted.has(hostedName(f.tmux) ?? ""),
       remoteUrl: remoteUrl(f.bridgeSessionId),
     };
   }

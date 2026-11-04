@@ -13,7 +13,7 @@ connect((prev, next) => {
   if (isMainWindow) alertOnChange(prev, next);
 });
 unlockAudioOnce();
-native?.onSelect((pid) => setState({ drawer: pid, selected: pid }));
+native?.onSelect((pid) => setState({ drawer: pid, selected: pid, typeInto: pid }));
 if (VIEW.menubar) document.documentElement.classList.add("is-menubar");
 
 createRoot(document.getElementById("root")!).render(<StrictMode>{VIEW.menubar ? <MenuBarPanel /> : <App />}</StrictMode>);

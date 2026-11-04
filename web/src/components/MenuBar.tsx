@@ -17,6 +17,8 @@ function openDashboard(pid: number | null): void {
 }
 
 function focusSession(s: Session): void {
+  // A session that runs here is typed to in its console, in the dashboard.
+  if (s.hosted) return openDashboard(s.pid);
   void act(`${s.pid}:focus`, `/api/sessions/${s.pid}/focus`, {}, true);
   native?.hidePanel();
 }

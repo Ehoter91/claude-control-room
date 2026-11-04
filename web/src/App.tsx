@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect } from "react";
 import type { Session } from "../../shared/types.ts";
 import { CloseDialog } from "./components/CloseDialog.tsx";
+import { NewSessionDialog } from "./components/NewSessionDialog.tsx";
 import { Overview } from "./components/Overview.tsx";
 import { SessionDetail } from "./components/SessionDetail.tsx";
 import { SettingsPanel } from "./components/SettingsPanel.tsx";
@@ -9,7 +10,7 @@ import { Toasts } from "./components/Toasts.tsx";
 import { SetupBanner, TopBar } from "./components/TopBar.tsx";
 import { Wall, WallToolbar } from "./components/Wall.tsx";
 import { WorktreesPanel } from "./components/WorktreesPanel.tsx";
-import { act, getState, matchesFilter, setState, useStore, VIEW } from "./store.ts";
+import { act, getState, matchesFilter, openSession, setState, useStore, VIEW } from "./store.ts";
 import { openUrl } from "./components/Monitor.tsx";
 
 function Drawer({ s }: { s: Session | null }) {
@@ -19,7 +20,7 @@ function Drawer({ s }: { s: Session | null }) {
         <>
           <motion.div className="drawer-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setState({ drawer: null })} />
           <motion.aside
-            className="drawer"
+            className={`drawer ${s.hosted ? "is-wide" : ""}`}
             initial={{ x: 40, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 40, opacity: 0 }}
@@ -45,7 +46,8 @@ function useKeyboard(visible: Session[]) {
       if (target.closest("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
       const st = getState();
       if (e.key === "Escape") {
-        setState(st.closing ? { closing: null } : st.panel ? { panel: null } : { drawer: null });
+        // The new-session dialog decides for itself: it may hold a console that still waits for an answer.
+        if (st.panel !== "new") setState(st.closing ? { closing: null } : st.panel ? { panel: null } : { drawer: null });
         return;
       }
       if (!document.hasFocus() || Date.now() - focusedAt < 900) return;
@@ -61,6 +63,10 @@ function useKeyboard(visible: Session[]) {
         if (next) setState({ selected: next.pid });
         return;
       }
+      if (e.key.toLowerCase() === "n" && !VIEW.wallOnly) {
+        setState({ panel: "new" });
+        return;
+      }
       if (e.key.toLowerCase() === "f") {
         const layout = st.snapshot?.settings.layout === "focus" ? "fit" : "focus";
         void fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json", "X-Control-Room": "1" }, body: JSON.stringify({ layout }) });
@@ -69,7 +75,10 @@ function useKeyboard(visible: Session[]) {
       const s = visible.find((x) => x.pid === st.selected);
       if (!s) return;
       const key = e.key.toLowerCase();
-      if (e.key === "Enter") void act(`${s.pid}:focus`, `/api/sessions/${s.pid}/focus`, {}, true);
+      if (e.key === "Enter") {
+        e.preventDefault(); // the Enter would otherwise reach the console that opens now
+        openSession(s);
+      }
       else if (e.key === " ") {
         e.preventDefault();
         setState({ drawer: st.drawer === s.pid ? null : s.pid });
@@ -143,6 +152,7 @@ export function App() {
       {closingSession && <CloseDialog s={closingSession} />}
       {panel === "settings" && <SettingsPanel snap={snap} />}
       {panel === "worktrees" && <WorktreesPanel />}
+      {panel === "new" && <NewSessionDialog snap={snap} />}
       <Toasts />
     </div>
   );
