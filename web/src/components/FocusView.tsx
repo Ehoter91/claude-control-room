@@ -13,7 +13,7 @@ export function FocusView({ sessions }: { sessions: Session[] }) {
   const current = sessions.find((s) => s.pid === selected) ?? sessions.find(needsYou) ?? sessions[0] ?? null;
   const dragRef = useDragOrder(sessions, ".focus-row", "y");
   return (
-    <div className="focus">
+    <div className="focus-layout">
       <div className="focus-main">
         {current ? <SessionDetail s={current} variant="focus" /> : <div className="wall-empty"><h3>No session to show</h3></div>}
       </div>
