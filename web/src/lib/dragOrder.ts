@@ -7,6 +7,18 @@ import { api } from "../store.ts";
 
 type Side = "before" | "after";
 
+/** The card closest to a point: by the distance to its edges, so a gap counts toward the card beside it. */
+function nearest(cards: HTMLElement[], x: number, y: number): HTMLElement | null {
+  let best: HTMLElement | null = null;
+  let bestD = Infinity;
+  for (const c of cards) {
+    const r = c.getBoundingClientRect();
+    const d = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
+    if (d < bestD) [best, bestD] = [c, d];
+  }
+  return best;
+}
+
 /** A ref for the element that holds the cards (`item` finds them in it); `axis` is how they line up. */
 export function useDragOrder(sessions: Session[], item: string, axis: "x" | "y"): (el: HTMLElement | null) => void {
   const list = useRef(sessions);
@@ -39,14 +51,16 @@ export function useDragOrder(sessions: Session[], item: string, axis: "x" | "y")
       if (dragged === null) return;
       e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-      // Over a card: before or after it, by which half the pointer is in. Past the last card: after the last one.
+      // Before or after the card under the pointer, by which half it is in. In a gap between cards, the nearest one
+      // counts; past the last row, after the last card.
+      const all = items();
       let card = (e.target as HTMLElement).closest<HTMLElement>(item);
-      let side: Side = "after";
-      if (card && el.contains(card)) {
-        const r = card.getBoundingClientRect();
-        side = (axis === "x" ? e.clientX - r.left < r.width / 2 : e.clientY - r.top < r.height / 2) ? "before" : "after";
-      } else card = items().at(-1) ?? null;
-      if (!card || pidOf(card) === dragged) return unmark();
+      if (!card || !el.contains(card)) card = nearest(all, e.clientX, e.clientY);
+      if (!card) return unmark();
+      const r = card.getBoundingClientRect();
+      let side: Side = (axis === "x" ? e.clientX < r.left + r.width / 2 : e.clientY < r.top + r.height / 2) ? "before" : "after";
+      if (e.clientY > Math.max(...all.map((c) => c.getBoundingClientRect().bottom))) [card, side] = [all.at(-1)!, "after"];
+      if (pidOf(card) === dragged) return unmark();
       if (mark?.el === card && mark.side === side) return;
       unmark();
       mark = { el: card, pid: pidOf(card), side };
@@ -61,7 +75,9 @@ export function useDragOrder(sessions: Session[], item: string, axis: "x" | "y")
       if (!target) return;
       // Its new neighbours, in the list as you see it.
       const rest = list.current.filter((s) => s.pid !== pid);
-      const at = rest.findIndex((s) => s.pid === target.pid) + (target.side === "after" ? 1 : 0);
+      const index = rest.findIndex((s) => s.pid === target.pid);
+      if (index < 0) return; // the card it was dropped on has left the list meanwhile
+      const at = index + (target.side === "after" ? 1 : 0);
       void api(`/api/sessions/${pid}/place`, { above: rest[at - 1]?.pid ?? null, below: rest[at]?.pid ?? null }).catch(() => null);
     };
     const end = () => {

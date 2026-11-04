@@ -137,9 +137,10 @@ async function lastPromptBefore(path: string, end: number): Promise<number | nul
     if (nl < 0 && from > 0) continue;
     const lines = buf.subarray(nl + 1).toString("utf8").split("\n");
     for (let i = lines.length - 1; i >= 0; i--) {
-      if (!lines[i].includes('"type":"user"')) continue;
+      // A tool's answer is a user line too, often a big one: it is skipped before it is parsed.
+      if (!lines[i].includes('"type":"user"') || lines[i].includes('"tool_result"')) continue;
       const e = parse(lines[i]);
-      if (!e || e.type !== "user" || e.isMeta || e.isSidechain || !userText(e)) continue;
+      if (!e || e.type !== "user" || !isYours(e) || !userText(e)) continue;
       const at = typeof e.timestamp === "string" ? Date.parse(e.timestamp) : NaN;
       if (!Number.isNaN(at)) return at;
     }
@@ -289,8 +290,13 @@ function applyUser(state: TranscriptState, e: Entry): void {
     state.pending = [];
     state.chat.push({ role: "user", text: said, at: e.timestamp ?? null });
     const at = typeof e.timestamp === "string" ? Date.parse(e.timestamp) : NaN;
-    if (!Number.isNaN(at)) state.lastPromptAt = Math.max(state.lastPromptAt ?? 0, at);
+    if (!Number.isNaN(at) && isYours(e)) state.lastPromptAt = Math.max(state.lastPromptAt ?? 0, at);
   }
+}
+
+/** A message you sent. Claude Code writes its own summary as a user message when it compacts; that one is not yours. */
+function isYours(e: Entry): boolean {
+  return !e.isMeta && !e.isSidechain && !e.isCompactSummary && !e.isVisibleInTranscriptOnly;
 }
 
 function applyAssistant(state: TranscriptState, e: Entry): void {

@@ -30,10 +30,11 @@ import { checkForUpdate, onUpdateBuilt, startUpdate } from "./update.ts";
 import { loadSettings, saveSettings, settings } from "./config.ts";
 import { listWorktrees } from "./git.ts";
 import { allPrs, checkGh } from "./github.ts";
-import { resizeConsole, stopConsole, typeInConsole, watchConsole } from "./console.ts";
+import { isTyping, resizeConsole, stopConsole, typeInConsole, watchConsole } from "./console.ts";
 import { body, DEV_ORIGINS, DIST, refusal, send, serveStatic } from "./http.ts";
 import { hostedName } from "./hosted.ts";
-import { Monitor, noteUsed } from "./monitor.ts";
+import { Monitor } from "./monitor.ts";
+import { noteUsed } from "./order.ts";
 import { APP_DIR, BRIDGE_FILE, TAP_DIR } from "./paths.ts";
 import { readPower, setSleepDisabled, sudoersLine } from "./power.ts";
 import { forgetStories, testToken } from "./shortcut.ts";
@@ -195,16 +196,18 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
     if (m) {
       const b = await body<{ data?: unknown; cols?: unknown; rows?: unknown }>(req);
       const ok = m[2] === "input" ? typeInConsole(m[1], b.data as string) : resizeConsole(m[1], Number(b.cols), Number(b.rows));
-      // Typing in a console is using that session: it moves to the front of the list.
-      const used = m[2] === "input" && ok ? monitor.snapshot?.sessions.find((s) => hostedName(s.tmux) === m![1]) : null;
+      // Typing in a console is using that session: it moves to the front of the list. The terminal's own reports,
+      // sent when the console gets or loses focus or the mouse moves over it, are not typing.
+      const used = m[2] === "input" && ok && isTyping(b.data) ? monitor.snapshot?.sessions.find((s) => hostedName(s.tmux) === m![1]) : null;
       if (used) noteUsed(used.sessionId);
       return send(res, 200, { ok, message: ok ? "Sent" : "That console is closed." });
     }
     m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename|move|model|effort|mode|place)$/.exec(p);
     if (m) {
-      const used = USED_BY.has(m[2]) ? monitor.snapshot?.sessions.find((s) => s.pid === Number(m![1])) : null;
-      if (used) noteUsed(used.sessionId);
+      const sessionId = monitor.snapshot?.sessions.find((s) => s.pid === Number(m![1]))?.sessionId;
       const out = await sessionAction(Number(m[1]), m[2], req);
+      // Only an action that did something counts as use; a refused one leaves the order alone.
+      if (sessionId && USED_BY.has(m[2]) && out && "ok" in out && out.ok) noteUsed(sessionId);
       return send(res, out ? 200 : 404, out ?? { ok: false, message: "Unknown action" });
     }
     switch (p) {

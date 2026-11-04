@@ -18,7 +18,7 @@ import { bridgeIdOf, remoteUrl } from "./remote.ts";
 import { findStoryId, shortcutReady, story as storyFor } from "./shortcut.ts";
 import { defaultEffort, latestUsage, readPermission, readTap, statusLineState } from "./statusline.ts";
 import { maybeSummarize, storedSummary } from "./summaries.ts";
-import { sortKey } from "./order.ts";
+import { sortKey, usedAt } from "./order.ts";
 import { updateState } from "./update.ts";
 import { pickName, savedName, tabName } from "./names.ts";
 import { modelName, readTranscript, type TranscriptState } from "./transcript.ts";
@@ -101,13 +101,6 @@ export async function findTranscript(sessionId: string, cwd: string, fresh = fal
   }
   transcriptPaths.set(sessionId, { path: found, at: Date.now() });
   return found;
-}
-
-// What you last did to a session from Control Room: typed in its console, answered it, changed its model.
-const usedHere = new Map<string, number>();
-
-export function noteUsed(sessionId: string): void {
-  usedHere.set(sessionId, Date.now());
 }
 
 // A mode set from Control Room shows at once; the transcript only records a mode with the next message.
@@ -341,7 +334,7 @@ export class Monitor {
     }
 
     const chat: ChatLine[] = t ? t.chat.slice(-PREVIEW_LINES) : [];
-    const lastUsedAt = Math.max(f.startedAt, t?.lastPromptAt ?? 0, usedHere.get(f.sessionId) ?? 0);
+    const lastUsedAt = Math.max(f.startedAt, t?.lastPromptAt ?? 0, usedAt(f.sessionId));
     const effort = tap?.effort ?? ask?.effort ?? t?.effort ?? this.effortDefault;
     return {
       pid: f.pid,

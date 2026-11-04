@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { pathToFileURL } from "node:url";
 import { isEffort, isMode, modeName, MODELS } from "../shared/claude.ts";
+import { keyBetween } from "./order.ts";
 import { isIdeId, openTarget, targetName } from "../shared/ides.ts";
 import type { ActionResult, Session, Settings, Snapshot, WorktreeReport } from "../shared/types.ts";
 import { demoClosePlan, DEMO_DEFAULT_COUNT, demoSnapshot, demoWorktrees } from "./demo-data.ts";
@@ -86,9 +87,8 @@ export async function startDemo(opts: { port?: number; sessions?: number } = {})
         return { ok: false, message: "In the app, this continues the session in a console in Control Room." };
       case "place": {
         const b = await body<{ above?: unknown; below?: unknown }>(req);
-        const keyOf = (other: unknown) => (typeof other === "number" ? (find(other)?.sortKey ?? null) : null);
-        const [hi, lo] = [keyOf(b.above), keyOf(b.below)];
-        const sortKey = hi !== null && lo !== null ? (hi + lo) / 2 : hi !== null ? hi - 60_000 : lo !== null ? lo + 60_000 : Date.now();
+        const keyOf = (other: unknown) => (typeof other === "number" && other !== pid ? (find(other)?.sortKey ?? null) : null);
+        const sortKey = keyBetween(keyOf(b.above), keyOf(b.below), Date.now());
         snap = { ...snap, sessions: snap.sessions.map((x) => (x.pid === pid ? { ...x, sortKey } : x)).sort((x, y) => y.sortKey - x.sortKey) };
         publish();
         return { ok: true, message: "Moved" };
