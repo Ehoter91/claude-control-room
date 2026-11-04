@@ -98,6 +98,9 @@ Click **New session** at the top, or press `N`. Pick a folder, add a first messa
 Claude Code starts in Control Room, and its details open with a live console.
 The console is the session's real terminal: type messages, slash commands, `Esc`, `Ctrl+C`, arrows, and paste, as in any terminal tab.
 `Shift+Enter` starts a new line in your message.
+The bar above the console works like a window's title bar. **A↓** and **A↑** change the text size; click the number for the usual size.
+**−** minimizes the console to its bar, and **⤢** fills the whole window with it. Double-click the bar to do the same, and press `Esc` outside the console to go back.
+Drag the left edge of the details panel to make it wider or narrower. Double-click the edge for the usual width.
 
 A session started here keeps running when you quit Control Room. It is back in its console when the app opens again.
 Close it with **Close…**, or type `/exit` in its console.
@@ -246,6 +249,12 @@ You can also do these later, in **Settings**:
 
 ### Update
 
+Click **Update** at the top of the dashboard when it shows, or open **Settings → Update**.
+Control Room pulls the new commits into the folder it was built from, builds itself again (about 3 minutes) and restarts. Sessions started in Control Room keep running.
+It pulls only when the branch can fast-forward; otherwise it says so and changes nothing. Uncommitted changes in that folder go into the build too.
+
+By hand, it is:
+
 ```bash
 git pull && npm install && npm run package
 ```
@@ -280,6 +289,10 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 | Start a session and type to it | Click **New session**, pick a folder, click **Start session**. Type in its console. |
 | Stop using a terminal for a session | Open its details and click **Move here**, once it is idle. |
 | Change a session's model, effort or mode | Click it in the tile's footer and pick another. |
+| Make the details panel wider | Drag its left edge. Double-click the edge to go back. |
+| Make the console text bigger | Click **A↑** above the console. |
+| Give the console the whole window | Click **⤢** above it, or double-click its bar. `Esc` outside the console goes back. |
+| Update Control Room | Click **Update** at the top, or **Settings → Update**. |
 | Rename a session | Click ✏️ on its tile or in its details, type the name, press Enter or click elsewhere. Its VS Code tab gets the name too. |
 | Move the icon | Hold ⌘ and drag the icon along the menu bar. |
 | Quit | Right-click the icon and choose **Quit**. |

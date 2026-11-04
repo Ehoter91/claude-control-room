@@ -1,7 +1,9 @@
 // Control Room as a Mac app: one server in this process, a menu bar icon with a quick panel, the dashboard, wall windows per display.
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, screen, shell, Tray } from "electron";
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -327,6 +329,23 @@ function openAtLoginOnce() {
   writeFileSync(marker, `${new Date().toISOString()}\n`);
 }
 
+// A finished update: the app quits, a small script copies the new build over this one once it has, and opens it.
+// Sessions started here run in tmux, so they keep running across the restart.
+function installUpdate(builtApp) {
+  if (!app.isPackaged) {
+    // Run from the checkout: the build already replaced dist/, so a restart is enough.
+    app.relaunch();
+    app.exit(0);
+    return;
+  }
+  const bundle = resolve(app.getPath("exe"), "..", "..", "..");
+  if (!bundle.endsWith(".app") || resolve(builtApp) === bundle) return;
+  const log = join(homedir(), ".claude-control-room", "update.log");
+  const script = 'while kill -0 "$1" 2>/dev/null; do sleep 0.2; done; /usr/bin/rsync -a --delete "$2/" "$3/" >>"$4" 2>&1; /usr/bin/open "$3"';
+  spawn("/bin/sh", ["-c", script, "update", String(process.pid), builtApp, bundle, log], { detached: true, stdio: "ignore" }).unref();
+  app.quit();
+}
+
 function senderWindow(e) {
   return BrowserWindow.fromWebContents(e.sender);
 }
@@ -404,7 +423,7 @@ app.whenReady().then(async () => {
     return;
   }
   const { startServer, loginAgeSeconds } = await import(pathToFileURL(bundle).href);
-  server = await startServer({});
+  server = await startServer({ installUpdate });
   // The whole app is dark, so its menus and the panel's blur are too.
   nativeTheme.themeSource = "dark";
   const dockIcon = join(root, "build", "icon.png");

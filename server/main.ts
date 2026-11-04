@@ -25,6 +25,7 @@ import {
   startRemoteControl,
 } from "./actions.ts";
 import { repoClaims } from "./claims.ts";
+import { checkForUpdate, onUpdateBuilt, startUpdate } from "./update.ts";
 import { loadSettings, saveSettings, settings } from "./config.ts";
 import { listWorktrees } from "./git.ts";
 import { allPrs, checkGh } from "./github.ts";
@@ -61,9 +62,13 @@ async function cleanOldTaps(): Promise<void> {
   }
 }
 
-export async function startServer(opts: { port?: number; dev?: boolean } = {}): Promise<Running> {
+export async function startServer(opts: { port?: number; dev?: boolean; installUpdate?: (builtApp: string) => void } = {}): Promise<Running> {
   await mkdir(APP_DIR, { recursive: true });
   await loadSettings();
+  if (opts.installUpdate) onUpdateBuilt(opts.installUpdate);
+  // A look for new commits soon after the start, then twice an hour.
+  setTimeout(() => void checkForUpdate(), 20_000).unref();
+  setInterval(() => void checkForUpdate(), 30 * 60_000).unref();
   const monitor = new Monitor();
   const jobs = new Map<string, ScanJob>();
   const prCache = new Map<string, Awaited<ReturnType<typeof allPrs>>>();
@@ -191,6 +196,10 @@ export async function startServer(opts: { port?: number; dev?: boolean } = {}): 
       return send(res, out ? 200 : 404, out ?? { ok: false, message: "Unknown action" });
     }
     switch (p) {
+      case "/api/update/check":
+        return send(res, 200, await checkForUpdate());
+      case "/api/update/run":
+        return send(res, 200, startUpdate());
       case "/api/sessions/new":
         return send(res, 200, await newSession(monitor, await body<Parameters<typeof newSession>[1]>(req)));
       case "/api/open": {

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect } from "react";
+import { type PointerEvent as ReactPointerEvent, useEffect, useState } from "react";
 import type { Session } from "../../shared/types.ts";
 import { CloseDialog } from "./components/CloseDialog.tsx";
 import { NewSessionDialog } from "./components/NewSessionDialog.tsx";
@@ -10,10 +10,47 @@ import { Toasts } from "./components/Toasts.tsx";
 import { SetupBanner, TopBar } from "./components/TopBar.tsx";
 import { Wall, WallToolbar } from "./components/Wall.tsx";
 import { WorktreesPanel } from "./components/WorktreesPanel.tsx";
-import { act, getState, matchesFilter, openSession, setState, useStore, VIEW } from "./store.ts";
+import { act, getState, matchesFilter, openSession, remember, setState, stored, useStore, VIEW } from "./store.ts";
 import { openUrl } from "./components/Monitor.tsx";
 
+const DRAWER_MIN = 420;
+
+/** The drawer's width while you drag its left edge, kept apart for drawers with a console and without one. */
+function useDrawerWidth(wide: boolean) {
+  const key = wide ? "wide" : "plain";
+  const [widths, setWidths] = useState(() => stored<Record<string, number>>("cr.drawerWidths", {}));
+  const clamp = (w: number) => Math.round(Math.max(DRAWER_MIN, Math.min(window.innerWidth - 80, w)));
+  const startDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    document.body.classList.add("is-resizing");
+    let latest = widths;
+    const move = (ev: PointerEvent) => {
+      latest = { ...latest, [key]: clamp(window.innerWidth - ev.clientX) };
+      setWidths(latest);
+    };
+    // On the window, so a release anywhere ends the drag, even outside the edge or over the console.
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      document.body.classList.remove("is-resizing");
+      remember("cr.drawerWidths", latest);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
+  const reset = () => {
+    const { [key]: _, ...rest } = widths;
+    setWidths(rest);
+    remember("cr.drawerWidths", rest);
+  };
+  return { width: widths[key] ? clamp(widths[key]) : undefined, startDrag, reset };
+}
+
 function Drawer({ s }: { s: Session | null }) {
+  const { width, startDrag, reset } = useDrawerWidth(!!s?.hosted);
   return (
     <AnimatePresence>
       {s && (
@@ -21,11 +58,13 @@ function Drawer({ s }: { s: Session | null }) {
           <motion.div className="drawer-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setState({ drawer: null })} />
           <motion.aside
             className={`drawer ${s.hosted ? "is-wide" : ""}`}
+            style={width ? { width } : undefined}
             initial={{ x: 40, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 40, opacity: 0 }}
             transition={{ type: "spring", stiffness: 420, damping: 40 }}
           >
+            <div className="drawer-grip" data-tip="Drag to resize · double-click for the usual width" onPointerDown={startDrag} onDoubleClick={reset} />
             <SessionDetail s={s} variant="drawer" />
           </motion.aside>
         </>
@@ -48,7 +87,10 @@ function useKeyboard(visible: Session[]) {
       const st = getState();
       if (e.key === "Escape") {
         // The new-session dialog decides for itself: it may hold a console that still waits for an answer.
-        if (st.panel !== "new") setState(st.closing ? { closing: null } : st.panel ? { panel: null } : { drawer: null });
+        if (st.panel === "new") return;
+        // A maximized console steps back to the details first. Esc inside the console still goes to Claude Code.
+        if (st.drawer && st.consoleView === "max" && !st.closing && !st.panel) return setState({ consoleView: "normal" });
+        setState(st.closing ? { closing: null } : st.panel ? { panel: null } : { drawer: null });
         return;
       }
       if (!document.hasFocus() || Date.now() - focusedAt < 900) return;

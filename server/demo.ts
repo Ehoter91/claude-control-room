@@ -142,6 +142,10 @@ export async function startDemo(opts: { port?: number; sessions?: number } = {})
       return send(res, out ? 200 : 404, out ?? { ok: false, message: "Unknown action" });
     }
     switch (p) {
+      case "/api/update/check":
+        return send(res, 200, snap.update);
+      case "/api/update/run":
+        return send(res, 200, { ok: false, message: "In the app, this pulls the new commits, builds Control Room again and restarts it." });
       case "/api/sessions/new":
         return send(res, 200, { ok: false, message: "In the app, this starts Claude Code in the folder you pick, with a console here." });
       case "/api/settings": {

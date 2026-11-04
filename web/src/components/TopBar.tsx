@@ -5,6 +5,7 @@ import { playChime } from "../lib/alerts.ts";
 import { native } from "../lib/native.ts";
 import { act, api, remember, setState, useStore, VIEW } from "../store.ts";
 import { IconButton } from "./Primitives.tsx";
+import { UpdatePill } from "./UpdateSection.tsx";
 
 export function Logo({ size = 22 }: { size?: number }) {
   return (
@@ -87,6 +88,7 @@ export function TopBar({ snap }: { snap: Snapshot | null }) {
         >
           {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
         </IconButton>
+        {snap && !VIEW.wallOnly && VIEW.sessionPid === null && <UpdatePill snap={snap} />}
         {cfg && !VIEW.wallOnly && VIEW.sessionPid === null && (
           <button type="button" className="btn btn-primary btn-sm topbar-new" data-tip="Start Claude Code in a folder (N)" data-tip-side="bottom" onClick={() => setState({ panel: "new" })}>
             <Plus size={14} /> New session

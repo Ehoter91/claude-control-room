@@ -3,8 +3,9 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
+import { AArrowDown, AArrowUp, ChevronDown, Maximize2, Minimize2, Minus, PictureInPicture2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { api } from "../store.ts";
+import { api, type ConsoleView, remember, stored } from "../store.ts";
 
 const THEME = {
   background: "#0a0d13",
@@ -30,6 +31,16 @@ const THEME = {
   brightWhite: "#ffffff",
 };
 
+const FONT = { min: 9, max: 24, default: 13 };
+
+// A web address in plain text; the punctuation that usually ends a sentence is left out of it.
+const URL_TEXT = /https?:\/\/[^\s"'<>`]*[^\s"'<>`.,;:!?)\]}]/g;
+
+/** Opens a link in your default browser, through the app: the console's page itself never leaves the dashboard. */
+function openLink(uri: string): void {
+  if (/^https?:\/\//i.test(uri)) void api("/api/open", { url: uri }).catch(() => null);
+}
+
 function bytes(base64: string): Uint8Array {
   const raw = atob(base64);
   const out = new Uint8Array(raw.length);
@@ -37,10 +48,33 @@ function bytes(base64: string): Uint8Array {
   return out;
 }
 
-export default function Console({ name, autoFocus = false, onFocused }: { name: string; autoFocus?: boolean; onFocused?: () => void }) {
+interface Props {
+  name: string;
+  autoFocus?: boolean;
+  onFocused?: () => void;
+  title?: string; // the session's name, for the bar when the rest of its details are out of sight
+  view?: ConsoleView; // with onView: the bar gets window buttons
+  onView?: (view: ConsoleView) => void;
+  onPopOut?: () => void;
+}
+
+export default function Console({ name, autoFocus = false, onFocused, title, view = "normal", onView, onPopOut }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
+  const refit = useRef<() => void>(() => {});
   const [state, setState] = useState<"connecting" | "live" | "ended">("connecting");
+  // One text size for every console, kept for next time.
+  const [fontSize, setFontSize] = useState(() => stored("cr.consoleFont", FONT.default));
+  const zoom = (by: number) => setFontSize((f) => Math.max(FONT.min, Math.min(FONT.max, f + by)));
+
+  // Bigger text means fewer columns and rows in the same box, so the session gets the new size too.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term || term.options.fontSize === fontSize) return;
+    term.options.fontSize = fontSize;
+    remember("cr.consoleFont", fontSize);
+    refit.current();
+  }, [fontSize]);
 
   // Takes the keyboard only when asked, and only once: in the focus layout, keys 1 to 9 still pick a session.
   useEffect(() => {
@@ -52,17 +86,40 @@ export default function Console({ name, autoFocus = false, onFocused }: { name: 
   useEffect(() => {
     const term = new Terminal({
       fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
-      fontSize: 13,
+      fontSize,
       lineHeight: 1.12,
       cursorBlink: true,
       scrollback: 5_000,
       theme: THEME,
+      // Links Claude Code marks as links (OSC 8), such as a pull request or a file it wrote.
+      linkHandler: { activate: (_e, uri) => openLink(uri), allowNonHttpProtocols: false },
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(box.current!);
     termRef.current = term;
     const wanted = () => fit.proposeDimensions() ?? { cols: 100, rows: 30 };
+
+    // And addresses that are only text, as a command prints them. A long one the terminal wrapped over several
+    // rows is read as one line, so a click opens all of it. One that runs into the right edge may go on in the next
+    // row, broken there by the program itself, so it gets no link: a click must never open half an address.
+    term.registerLinkProvider({
+      provideLinks(y, done) {
+        const buf = term.buffer.active;
+        let first = y - 1;
+        while (first > 0 && buf.getLine(first)?.isWrapped) first--;
+        let last = y - 1;
+        while (buf.getLine(last + 1)?.isWrapped) last++;
+        let text = "";
+        for (let i = first; i <= last; i++) text += buf.getLine(i)?.translateToString(i === last) ?? "";
+        const cols = term.cols;
+        const at = (i: number) => ({ x: (i % cols) + 1, y: first + Math.floor(i / cols) + 1 });
+        const links = [...text.matchAll(URL_TEXT)]
+          .map((m) => ({ text: m[0], range: { start: at(m.index), end: at(m.index + m[0].length - 1) }, activate: () => openLink(m[0]) }))
+          .filter((l) => l.range.start.y <= y && y <= l.range.end.y && l.range.end.x < cols - 3);
+        done(links.length ? links : undefined);
+      },
+    });
 
     // tmux already answers what Claude Code asks the terminal (its type, the cursor position, the colors).
     // A second answer from here would reach Claude Code as typed text, so these questions go unanswered.
@@ -150,14 +207,16 @@ export default function Console({ name, autoFocus = false, onFocused }: { name: 
 
     let resizeTimer: ReturnType<typeof setTimeout> | undefined;
     let last = "";
-    const observer = new ResizeObserver(() => {
+    const sendSize = () => {
       if (!box.current?.offsetParent) return;
       const { cols, rows } = wanted();
       if (`${cols}x${rows}` === last) return;
       last = `${cols}x${rows}`;
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => void api(`/api/console/${name}/resize`, { cols, rows }).catch(() => null), 120);
-    });
+    };
+    refit.current = sendSize;
+    const observer = new ResizeObserver(sendSize);
     observer.observe(box.current!);
 
     return () => {
@@ -165,12 +224,64 @@ export default function Console({ name, autoFocus = false, onFocused }: { name: 
       observer.disconnect();
       stream?.close();
       termRef.current = null;
+      refit.current = () => {};
       term.dispose();
     };
   }, [name]);
 
+  // Like a window's title bar: a double-click maximizes or restores, and a folded console opens with a click.
+  const toggleMax = () => onView?.(view === "max" ? "normal" : "max");
   return (
-    <div className={`console is-${state}`} onClick={(e) => e.stopPropagation()}>
+    <div className={`console is-${state} is-view-${view}`} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="console-bar"
+        onDoubleClick={(e) => e.target === e.currentTarget && toggleMax()}
+        onClick={(e) => view === "min" && e.target === e.currentTarget && onView?.("normal")}
+      >
+        <span className="console-title">
+          {view !== "normal" && title}
+          {view === "min" && <span className="muted"> · console minimized, click to show</span>}
+        </span>
+        {view !== "min" && (
+          <div className="console-tools" aria-label="Text size">
+            <button type="button" aria-label="Smaller text" data-tip="Smaller text" disabled={fontSize <= FONT.min} onClick={() => zoom(-1)}>
+              <AArrowDown size={15} />
+            </button>
+            <button type="button" className="console-zoom-size" data-tip="Text size · click for the usual size" onClick={() => setFontSize(FONT.default)}>
+              {fontSize}
+            </button>
+            <button type="button" aria-label="Bigger text" data-tip="Bigger text" disabled={fontSize >= FONT.max} onClick={() => zoom(1)}>
+              <AArrowUp size={15} />
+            </button>
+          </div>
+        )}
+        {onView && (
+          <div className="console-tools" aria-label="Console window">
+            {view === "min" ? (
+              <button type="button" aria-label="Show console" data-tip="Show the console" onClick={() => onView("normal")}>
+                <ChevronDown size={15} />
+              </button>
+            ) : (
+              <button type="button" aria-label="Minimize console" data-tip="Minimize: fold it to this bar" onClick={() => onView("min")}>
+                <Minus size={15} />
+              </button>
+            )}
+            <button
+              type="button"
+              aria-label={view === "max" ? "Restore console" : "Maximize console"}
+              data-tip={view === "max" ? "Back to the details (Esc outside the console)" : "Fill the window (double-click the bar)"}
+              onClick={toggleMax}
+            >
+              {view === "max" ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </button>
+            {onPopOut && (
+              <button type="button" aria-label="Pop out" data-tip="Pop out to its own window" onClick={onPopOut}>
+                <PictureInPicture2 size={14} />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
       <div className="console-term" ref={box} />
       {state === "connecting" && <div className="console-note">Connecting…</div>}
       {state === "ended" && <div className="console-note">This session has ended.</div>}

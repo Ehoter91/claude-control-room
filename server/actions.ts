@@ -388,7 +388,8 @@ export async function moveSession(monitor: Monitor, pid: number): Promise<Action
 }
 
 export function openUrl(url: string): ActionResult {
-  if (!/^https:\/\//.test(url)) return { ok: false, message: "Only https links open from here." };
+  // Web pages only: http too, for a dev server on this Mac. `open` would also run file: and app links.
+  if (typeof url !== "string" || !/^https?:\/\/[^\s]+$/i.test(url)) return { ok: false, message: "Only web links open from here." };
   launch("open", [url]);
   return { ok: true, message: "Opened" };
 }

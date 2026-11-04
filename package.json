@@ -13,7 +13,7 @@
     "build:server": "esbuild server/main.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/server.mjs",
     "build:demo": "esbuild server/demo.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/demo.mjs",
     "build:vsix": "node scripts/build-vsix.mjs",
-    "build": "npm run build:web && npm run build:server && npm run build:vsix",
+    "build": "npm run build:web && npm run build:server && npm run build:vsix && node scripts/build-info.mjs",
     "start": "node dist/server.mjs",
     "demo": "npm run build:web && npm run build:demo && node dist/demo.mjs",
     "app": "npm run build && electron .",

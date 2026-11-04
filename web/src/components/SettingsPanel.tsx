@@ -7,6 +7,7 @@ import { playChime } from "../lib/alerts.ts";
 import { native } from "../lib/native.ts";
 import { act, api, setState, toast, useStore } from "../store.ts";
 import { Toggle } from "./Primitives.tsx";
+import { UpdateSection } from "./UpdateSection.tsx";
 
 function Line(props: { title: string; text: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -59,6 +60,13 @@ export function SettingsPanel({ snap }: { snap: Snapshot }) {
         </div>
 
         <div className="set-body">
+          {snap.update && (
+            <>
+              <h4 className="set-section">Update</h4>
+              <UpdateSection u={snap.update} />
+            </>
+          )}
+
           <h4 className="set-section">Alerts</h4>
           <Line title="Desktop notifications" text="When a session needs you, or finishes while you look elsewhere.">
             <Toggle label="Desktop notifications" on={cfg.notifications} onChange={(on) => save({ notifications: on })} />

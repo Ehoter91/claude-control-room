@@ -4,7 +4,7 @@ import { ideName } from "../../../shared/ides.ts";
 import type { ChatLine, Session } from "../../../shared/types.ts";
 import { duration, folderName, money, startedLabel } from "../lib/format.ts";
 import { popoutSession } from "../lib/native.ts";
-import { act, api, consoleName, setState, useOpenName, useStore } from "../store.ts";
+import { act, api, consoleName, getState, setState, useOpenName, useStore } from "../store.ts";
 import { ApprovalCard, NameEditor, openUrl, PrChip, QuestionCard, RemoteButton, RenameButton } from "./Monitor.tsx";
 import { StatusOrb, useNow } from "./Primitives.tsx";
 import { TuneChips } from "./Tuning.tsx";
@@ -128,6 +128,9 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
   const openIn = useOpenName(s);
   const tmuxName = consoleName(s);
   const typeInto = useStore((st) => st.typeInto === s.pid);
+  const consoleView = useStore((st) => (tmuxName ? st.consoleView : "normal"));
+  // A maximized console belongs to this session: the next one opens with its details.
+  useEffect(() => () => void (getState().consoleView === "max" && setState({ consoleView: "normal" })), []);
   const where = tmuxName
     ? "Control Room"
     : s.tmux
@@ -136,7 +139,7 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
         ? `${ideName(s.ide)} terminal${s.vscodeLinked ? " (linked)" : ""}`
         : "Terminal";
   return (
-    <div className={`detail detail-${variant} st-${a.kind}`}>
+    <div className={`detail detail-${variant} st-${a.kind} console-${consoleView}`}>
       <div className="detail-head">
         <div className="detail-status">
           <StatusOrb kind={a.kind} size={12} />
@@ -193,7 +196,15 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
       {tmuxName && (
         <div className="detail-console">
           <Suspense fallback={<div className="console" />}>
-            <Console name={tmuxName} autoFocus={variant === "popout" || typeInto} onFocused={() => typeInto && setState({ typeInto: null })} />
+            <Console
+              name={tmuxName}
+              autoFocus={variant === "popout" || typeInto}
+              onFocused={() => typeInto && setState({ typeInto: null })}
+              title={s.name}
+              view={consoleView}
+              onView={(v) => setState({ consoleView: v })}
+              onPopOut={variant === "popout" ? undefined : () => popoutSession(s.pid)}
+            />
           </Suspense>
         </div>
       )}
