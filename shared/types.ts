@@ -184,6 +184,24 @@ export interface Snapshot {
   power: PowerState;
   setup: SetupState;
   settings: Settings;
+  update: UpdateState;
+}
+
+/** Updating the app from the git checkout it was built from. */
+export interface UpdateState {
+  source: string | null; // that checkout; null when the app was not built from one
+  built: string | null; // the commit this app was built from
+  builtAt: string | null;
+  branch: string | null;
+  upstream: string | null; // e.g. "upstream/main"; null when the branch follows none
+  behind: number; // commits the upstream has that the checkout lacks
+  unbuilt: number; // commits in the checkout that this app was not built with
+  incoming: string[]; // subjects of the newest of those commits
+  dirty: boolean; // uncommitted changes in the checkout, which go into the build too
+  checkedAt: number | null;
+  phase: "idle" | "pulling" | "installing" | "building" | "restarting" | "failed";
+  message: string | null;
+  restarts: boolean; // the app swaps the new build in by itself
 }
 
 export type WorktreeVerdict = "safe" | "probably-safe" | "keep" | "in-use" | "main" | "gone";

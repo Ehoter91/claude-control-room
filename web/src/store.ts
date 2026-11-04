@@ -24,7 +24,11 @@ export interface State {
   toasts: Toast[];
   busy: Record<string, boolean>; // "pid:action" while a request runs
   typeInto: number | null; // pid whose console takes the keyboard when it shows
+  consoleView: ConsoleView;
 }
+
+/** How a session's console shows: in its details, folded to its bar, or filling the window. */
+export type ConsoleView = "normal" | "min" | "max";
 
 const params = new URLSearchParams(location.search);
 export const VIEW = {
@@ -62,6 +66,7 @@ let state: State = {
   toasts: [],
   busy: {},
   typeInto: null,
+  consoleView: "normal",
 };
 const listeners = new Set<() => void>();
 

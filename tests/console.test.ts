@@ -69,6 +69,13 @@ describe("hosted sessions", () => {
     expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ model: "opus", modelSettings: { "claude-opus-5-5": { effortLevel: "xhigh" } }, theme: "light" });
   });
 
+  it("does not update a copy that was not built from a git checkout", async () => {
+    const update = await import("../server/update.ts");
+    expect(update.updateState().source).toBeNull();
+    expect(update.startUpdate().ok).toBe(false);
+    expect(update.updateState().phase).toBe("idle");
+  });
+
   it("opens a session that runs here in its console", () => {
     const t = openTarget({ tmux: "cr-0a1b2c3d:@0.%0", ide: null, hosted: true }, "pycharm");
     expect(t).toEqual({ kind: "console" });

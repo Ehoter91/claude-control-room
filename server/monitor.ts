@@ -18,6 +18,7 @@ import { bridgeIdOf, remoteUrl } from "./remote.ts";
 import { findStoryId, shortcutReady, story as storyFor } from "./shortcut.ts";
 import { defaultEffort, latestUsage, readPermission, readTap, statusLineState } from "./statusline.ts";
 import { maybeSummarize, storedSummary } from "./summaries.ts";
+import { updateState } from "./update.ts";
 import { pickName, savedName, tabName } from "./names.ts";
 import { modelName, readTranscript, type TranscriptState } from "./transcript.ts";
 import { bridgeConnected, helperState, terminalName, windowFor } from "./vscode.ts";
@@ -227,6 +228,7 @@ export class Monitor {
         shortcutReady: shortcutReady(),
       },
       settings: publicSettings(),
+      update: updateState(),
     };
     this.snapshot = snapshot;
     const json = JSON.stringify({ ...snapshot, at: 0 });
