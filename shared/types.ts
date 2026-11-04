@@ -116,8 +116,10 @@ export interface Session {
   storyId: number | null;
   claims: Claim[];
   model: string | null; // display name, e.g. "Opus 5.5"
+  modelId: string | null; // e.g. "claude-opus-5-5[1m]"
   effort: string | null;
   effortIsDefault: boolean;
+  mode: string | null; // permission mode, e.g. "auto", "plan"
   contextPercent: number | null;
   costUsd: number | null;
   repoName: string; // e.g. "storefront"

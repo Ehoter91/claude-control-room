@@ -67,6 +67,33 @@ async function writeSettings(next: ClaudeSettings): Promise<void> {
   await rename(tmp, CLAUDE_SETTINGS);
 }
 
+const DEFAULT_KEYS = ["model", "modelSettings", "effortLevel"] as const;
+
+/**
+ * Claude Code's /model and /effort also save the choice as the default for new sessions. A change made from
+ * Control Room is for one session only, so this puts the saved defaults back once `change` is done.
+ */
+export async function keepDefaults<T>(change: () => Promise<T>): Promise<T> {
+  const before = await readSettings().catch(() => null);
+  try {
+    return await change();
+  } finally {
+    if (before) await restoreDefaults(before).catch(() => {});
+  }
+}
+
+async function restoreDefaults(before: Record<string, unknown>): Promise<void> {
+  const now: Record<string, unknown> = await readSettings();
+  let changed = false;
+  for (const key of DEFAULT_KEYS) {
+    if (JSON.stringify(now[key]) === JSON.stringify(before[key])) continue;
+    if (before[key] === undefined) delete now[key];
+    else now[key] = before[key];
+    changed = true;
+  }
+  if (changed) await writeSettings(now);
+}
+
 async function backupSettings(): Promise<string> {
   await mkdir(BACKUP_DIR, { recursive: true });
   const target = join(BACKUP_DIR, `settings.${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
@@ -167,6 +194,7 @@ export interface Tap {
   sessionId: string;
   mtimeMs: number;
   model: string | null;
+  modelId: string | null;
   effort: string | null;
   contextPercent: number | null;
   costUsd: number | null;
@@ -201,6 +229,7 @@ export async function readTap(sessionId: string): Promise<Tap | null> {
       sessionId,
       mtimeMs,
       model: d.model?.display_name ?? null,
+      modelId: d.model?.id ?? null,
       effort: d.effort?.level ?? null,
       contextPercent: typeof d.context_window?.used_percentage === "number" ? d.context_window.used_percentage : null,
       costUsd: typeof d.cost?.total_cost_usd === "number" ? d.cost.total_cost_usd : null,

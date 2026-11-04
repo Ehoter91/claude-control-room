@@ -24,6 +24,8 @@ export interface TranscriptState {
   branch: string | null;
   model: string | null; // raw model id, e.g. "claude-opus-5-5"
   effort: string | null; // from a `/effort` command in this session
+  mode: string | null; // the permission mode of the last message
+  modeAt: number | null; // when that message was sent
   costUsd: number | null;
   lastAssistantText: string | null;
   lastEntryAt: number | null;
@@ -52,6 +54,8 @@ export function emptyState(path: string): TranscriptState {
     branch: null,
     model: null,
     effort: null,
+    mode: null,
+    modeAt: null,
     costUsd: null,
     lastAssistantText: null,
     lastEntryAt: null,
@@ -212,6 +216,10 @@ function applyEntry(state: TranscriptState, e: Entry): void {
     case "relocated":
       if (typeof e.relocatedCwd === "string") state.cwd = e.relocatedCwd;
       return;
+    case "permission-mode":
+      // Written with each message, and on its own when a session resumes.
+      if (typeof e.permissionMode === "string" && e.isSidechain !== true) state.mode = e.permissionMode;
+      return;
     case "cost-state":
       if (typeof e.totalCostUSD === "number") state.costUsd = e.totalCostUSD;
       return;
@@ -244,6 +252,11 @@ function applyUser(state: TranscriptState, e: Entry): void {
     }
   }
   if (e.isMeta) return;
+  if (typeof e.permissionMode === "string") {
+    state.mode = e.permissionMode;
+    const at = typeof e.timestamp === "string" ? Date.parse(e.timestamp) : NaN;
+    if (!Number.isNaN(at)) state.modeAt = at;
+  }
   const said = userText(e);
   if (said) {
     state.pending = [];

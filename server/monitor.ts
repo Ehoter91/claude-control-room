@@ -76,10 +76,11 @@ function encodeProjectDir(cwd: string): string {
 
 const transcriptPaths = new Map<string, { path: string | null; at: number }>();
 
-async function findTranscript(sessionId: string, cwd: string): Promise<string | null> {
+/** `fresh` skips the remembered "none yet": a first message may have just written it. */
+export async function findTranscript(sessionId: string, cwd: string, fresh = false): Promise<string | null> {
   const hit = transcriptPaths.get(sessionId);
   if (hit?.path && existsSync(hit.path)) return hit.path;
-  if (hit && !hit.path && Date.now() - hit.at < 20_000) return null;
+  if (hit && !hit.path && !fresh && Date.now() - hit.at < 20_000) return null;
   let found: string | null = null;
   const direct = join(CLAUDE_PROJECTS_DIR, encodeProjectDir(cwd), `${sessionId}.jsonl`);
   if (existsSync(direct)) found = direct;
@@ -98,6 +99,19 @@ async function findTranscript(sessionId: string, cwd: string): Promise<string | 
   }
   transcriptPaths.set(sessionId, { path: found, at: Date.now() });
   return found;
+}
+
+// A mode set from Control Room shows at once; the transcript only records a mode with the next message.
+const setModes = new Map<string, { mode: string; at: number }>();
+
+export function noteMode(sessionId: string, mode: string): void {
+  setModes.set(sessionId, { mode, at: Date.now() });
+}
+
+function modeOf(sessionId: string, t: TranscriptState | null): string | null {
+  const set = setModes.get(sessionId);
+  if (set && set.at > (t?.modeAt ?? 0)) return set.mode;
+  return t?.mode ?? null;
 }
 
 /** The IDE whose terminal runs the process; null when tmux, a terminal app or nothing known comes first. */
@@ -336,8 +350,10 @@ export class Monitor {
       storyId,
       claims,
       model: tap?.model ?? modelName(t?.model ?? null),
+      modelId: tap?.modelId ?? t?.model ?? null,
       effort,
       effortIsDefault: !tap?.effort && !ask?.effort && !t?.effort,
+      mode: modeOf(f.sessionId, t),
       contextPercent: tap?.contextPercent ?? null,
       costUsd: tap?.costUsd ?? t?.costUsd ?? null,
       repoName: git ? basename(git.mainRoot) : basename(cwd),

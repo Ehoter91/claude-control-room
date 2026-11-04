@@ -22,6 +22,7 @@ import { duration } from "../lib/format.ts";
 import { popoutSession } from "../lib/native.ts";
 import { act, api, openSession, setState, useOpenName, useStore } from "../store.ts";
 import { IconButton, Ring, StatusOrb, useNow } from "./Primitives.tsx";
+import { TuneChips } from "./Tuning.tsx";
 
 export function openUrl(url: string): void {
   void api("/api/open", { url });
@@ -356,13 +357,7 @@ export function Monitor({ s, index, selected }: { s: Session; index: number; sel
       )}
 
       <footer className="mon-foot">
-        <span className="foot-item" data-tip="Model">
-          {s.model ?? "—"}
-        </span>
-        <span className="foot-dot">·</span>
-        <span className="foot-item" data-tip={s.effortIsDefault ? "Effort (your default)" : "Effort"}>
-          {s.effort ?? "—"}
-        </span>
+        <TuneChips s={s} />
         <span className="foot-dot">·</span>
         <span className="foot-item foot-repo" data-tip={s.git?.isWorktree ? `Worktree ${s.git.root}` : s.cwd}>
           {s.repoName}

@@ -1,6 +1,7 @@
 import { FolderOpen, Plus, TerminalSquare } from "lucide-react";
 import { motion } from "motion/react";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { DEFAULT_MODE, EFFORTS, MODELS, MODES } from "../../../shared/claude.ts";
 import type { ActionResult, Snapshot } from "../../../shared/types.ts";
 import { folderName } from "../lib/format.ts";
 import { native } from "../lib/native.ts";
@@ -20,6 +21,9 @@ export function NewSessionDialog({ snap }: { snap: Snapshot }) {
   const [cwd, setCwd] = useState(choices[0] ?? "");
   const [typed, setTyped] = useState(choices.length === 0 && !native);
   const [prompt, setPrompt] = useState("");
+  // Empty means Claude Code's own default. The last choice is kept for next time.
+  const [tune, setTune] = useState(() => stored("cr.newSessionTune", { model: "", effort: "", mode: DEFAULT_MODE }));
+  const setTuned = (part: Partial<typeof tune>) => setTune((t) => ({ ...t, ...part }));
   const [starting, setStarting] = useState(false);
   const [waiting, setWaiting] = useState<string | null>(null); // a console that must be answered before the session shows
   const open = useRef(true);
@@ -54,13 +58,14 @@ export function NewSessionDialog({ snap }: { snap: Snapshot }) {
   const start = async () => {
     if (!cwd.trim() || starting) return;
     setStarting(true);
-    const r = await api<ActionResult & { pid?: number; name?: string }>("/api/sessions/new", { cwd: cwd.trim(), prompt }).catch(
+    const r = await api<ActionResult & { pid?: number; name?: string }>("/api/sessions/new", { cwd: cwd.trim(), prompt, ...tune }).catch(
       (err: Error) => ({ ok: false, message: err.message }) as ActionResult & { pid?: number; name?: string },
     );
     // Closed while it started: the session runs, and shows in the list, but nothing jumps at you.
     if (!open.current) return void (r.ok && toast(r.pid ? "Started" : r.message, "ok"));
     setStarting(false);
     if (!r.ok) return toast(r.message, "error");
+    remember("cr.newSessionTune", tune);
     remember("cr.recentFolders", [cwd.trim(), ...stored<string[]>("cr.recentFolders", []).filter((f) => f !== cwd.trim())].slice(0, 8));
     if (r.pid) setState({ panel: null, drawer: r.pid, selected: r.pid, typeInto: r.pid });
     else if (r.name) setWaiting(r.name);
@@ -141,6 +146,42 @@ export function NewSessionDialog({ snap }: { snap: Snapshot }) {
                 }}
               />
             </label>
+
+            <div className="field-trio">
+              <label className="field">
+                <span className="field-label">Model</span>
+                <select className="select" value={tune.model} onChange={(e) => setTuned({ model: e.target.value })}>
+                  <option value="">Your default</option>
+                  {MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">Effort</span>
+                <select className="select" value={tune.effort} onChange={(e) => setTuned({ effort: e.target.value })}>
+                  <option value="">Your default</option>
+                  {EFFORTS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">Mode</span>
+                <select className="select" value={tune.mode} onChange={(e) => setTuned({ mode: e.target.value })}>
+                  {MODES.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p className="field-hint">{MODES.find((m) => m.id === tune.mode)?.hint}. Change any of these later from the session's card.</p>
 
             {!snap.setup.tmuxReady && (
               <p className="field-warn">
