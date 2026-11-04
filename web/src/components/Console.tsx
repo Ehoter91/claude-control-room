@@ -33,6 +33,14 @@ const THEME = {
 
 const FONT = { min: 9, max: 24, default: 13 };
 
+// A web address in plain text; the punctuation that usually ends a sentence is left out of it.
+const URL_TEXT = /https?:\/\/[^\s"'<>`]*[^\s"'<>`.,;:!?)\]}]/g;
+
+/** Opens a link in your default browser, through the app: the console's page itself never leaves the dashboard. */
+function openLink(uri: string): void {
+  if (/^https?:\/\//i.test(uri)) void api("/api/open", { url: uri }).catch(() => null);
+}
+
 function bytes(base64: string): Uint8Array {
   const raw = atob(base64);
   const out = new Uint8Array(raw.length);
@@ -83,12 +91,35 @@ export default function Console({ name, autoFocus = false, onFocused, title, vie
       cursorBlink: true,
       scrollback: 5_000,
       theme: THEME,
+      // Links Claude Code marks as links (OSC 8), such as a pull request or a file it wrote.
+      linkHandler: { activate: (_e, uri) => openLink(uri), allowNonHttpProtocols: false },
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(box.current!);
     termRef.current = term;
     const wanted = () => fit.proposeDimensions() ?? { cols: 100, rows: 30 };
+
+    // And addresses that are only text, as a command prints them. A long one the terminal wrapped over several
+    // rows is read as one line, so a click opens all of it. One that runs into the right edge may go on in the next
+    // row, broken there by the program itself, so it gets no link: a click must never open half an address.
+    term.registerLinkProvider({
+      provideLinks(y, done) {
+        const buf = term.buffer.active;
+        let first = y - 1;
+        while (first > 0 && buf.getLine(first)?.isWrapped) first--;
+        let last = y - 1;
+        while (buf.getLine(last + 1)?.isWrapped) last++;
+        let text = "";
+        for (let i = first; i <= last; i++) text += buf.getLine(i)?.translateToString(i === last) ?? "";
+        const cols = term.cols;
+        const at = (i: number) => ({ x: (i % cols) + 1, y: first + Math.floor(i / cols) + 1 });
+        const links = [...text.matchAll(URL_TEXT)]
+          .map((m) => ({ text: m[0], range: { start: at(m.index), end: at(m.index + m[0].length - 1) }, activate: () => openLink(m[0]) }))
+          .filter((l) => l.range.start.y <= y && y <= l.range.end.y && l.range.end.x < cols - 3);
+        done(links.length ? links : undefined);
+      },
+    });
 
     // tmux already answers what Claude Code asks the terminal (its type, the cursor position, the colors).
     // A second answer from here would reach Claude Code as typed text, so these questions go unanswered.
