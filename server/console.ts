@@ -47,6 +47,14 @@ export function keyCommands(target: string, data: string): string[] {
   return commands;
 }
 
+// What a terminal sends by itself, not typed: focus in and out (CSI I, CSI O) and mouse reports (X10 and SGR).
+const REPORTS = /\x1b\[[IO]|\x1b\[<\d+;\d+;\d+[Mm]|\x1b\[M[\s\S]{3}/g;
+
+/** Whether keys from the browser hold anything a person typed, beyond the terminal's own reports. */
+export function isTyping(data: unknown): boolean {
+  return typeof data === "string" && data.replace(REPORTS, "") !== "";
+}
+
 function clampSize(cols: number, rows: number): [number, number] {
   const c = Number.isFinite(cols) ? cols : 100;
   const r = Number.isFinite(rows) ? rows : 30;

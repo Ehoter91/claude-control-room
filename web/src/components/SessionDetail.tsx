@@ -127,15 +127,18 @@ const CURSOR: Record<Edge, string> = { n: "ns-resize", s: "ns-resize", e: "ew-re
  * The console with edges and corners to drag, like a window's. Up, down, left or right away from the console makes it
  * bigger. Its width is the details panel's, so a side edge resizes the panel. A double-click on an edge resets it.
  */
-function ConsoleFrame({ sides, height, children }: { sides: boolean; height: number | null; children: React.ReactNode }) {
+function ConsoleFrame(props: { edges: "all" | "ends" | "none"; height: number | null; children: React.ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
-  const edges: Edge[] = sides ? ["n", "s", "e", "w", "ne", "nw", "se", "sw"] : ["n", "s"];
+  const edges: Edge[] = props.edges === "all" ? ["n", "s", "e", "w", "ne", "nw", "se", "sw"] : props.edges === "ends" ? ["n", "s"] : [];
   const start = (edge: Edge, e: React.PointerEvent) => {
-    const h0 = box.current!.getBoundingClientRect().height;
+    const r = box.current!.getBoundingClientRect();
+    const h0 = r.height;
+    // The console grows downward, so its bottom, where Claude Code's prompt is, stays on screen.
+    const tallest = window.innerHeight - r.top - 16;
     const w0 = box.current!.closest(".drawer")?.getBoundingClientRect().width ?? 0;
     dragFrom(e, CURSOR[edge], (dx, dy) => {
-      if (edge.includes("s")) setConsoleHeight(h0 + dy);
-      if (edge.includes("n")) setConsoleHeight(h0 - dy);
+      if (edge.includes("s")) setConsoleHeight(Math.min(tallest, h0 + dy));
+      if (edge.includes("n")) setConsoleHeight(Math.min(tallest, h0 - dy));
       if (edge.includes("e")) setDrawerWidth("wide", w0 + dx);
       if (edge.includes("w")) setDrawerWidth("wide", w0 - dx);
     });
@@ -146,8 +149,9 @@ function ConsoleFrame({ sides, height, children }: { sides: boolean; height: num
     keepSizes();
   };
   return (
-    <div className="console-frame" ref={box} style={height ? { height, flex: "none" } : undefined}>
-      {children}
+    // A saved height is what it wants; with less room, in a smaller window or another layout, it gives way.
+    <div className="console-frame" ref={box} style={props.height ? { flex: `0 1 ${props.height}px`, minHeight: 0 } : undefined}>
+      {props.children}
       {edges.map((edge) => (
         <div key={edge} className={`console-edge edge-${edge}`} aria-hidden onPointerDown={(e) => start(edge, e)} onDoubleClick={() => reset(edge)} />
       ))}
@@ -164,6 +168,8 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
   const openIn = useOpenName(s);
   const tmuxName = consoleName(s);
   const typeInto = useStore((st) => st.typeInto === s.pid);
+  // In the focus layout a console gets the room: the header is one row, with the buttons beside it.
+  const compact = variant === "focus" && !!tmuxName;
   const consoleView = useStore((st) => (tmuxName ? st.consoleView : "normal"));
   // A height you dragged applies in the details; folded or filling the window, the console has its own size.
   const consoleHeight = useStore((st) => (tmuxName && consoleView === "normal" && variant !== "popout" ? st.consoleHeight : null));
@@ -176,64 +182,92 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
       : s.ide
         ? `${ideName(s.ide)} terminal${s.vscodeLinked ? " (linked)" : ""}`
         : "Terminal";
-  return (
-    <div className={`detail detail-${variant} st-${a.kind} console-${consoleView} ${consoleHeight ? "console-sized" : ""}`}>
-      <div className="detail-head">
-        <div className="detail-status">
-          <StatusOrb kind={a.kind} size={12} />
-          <span className="detail-status-label">{a.label}</span>
-          <span className="detail-status-time">· {duration(now - a.since)}</span>
-          {variant === "drawer" && (
-            <button type="button" className="icon-btn detail-close" aria-label="Close details" onClick={() => setState({ drawer: null })}>
-              <X size={16} />
-            </button>
-          )}
-        </div>
-        <div className="detail-title-row">
-          {renaming ? <NameEditor s={s} className="detail-title" onDone={() => setRenaming(false)} /> : <h2 className="detail-title">{s.name}</h2>}
-          {!renaming && <RenameButton s={s} onClick={() => setRenaming(true)} />}
-        </div>
-        {s.nameSource !== "summary" && <p className="detail-headline">{s.summary.headline}</p>}
-        {s.summary.now && <p className="detail-now">{s.summary.now}</p>}
-        {a.detail && a.kind === "working" && <p className="detail-doing">{a.detail}</p>}
+  const head = (
+    <div className={`detail-head ${compact ? "is-compact" : ""}`}>
+      <div className="detail-status">
+        <StatusOrb kind={a.kind} size={12} />
+        <span className="detail-status-label">{a.label}</span>
+        <span className="detail-status-time">· {duration(now - a.since)}</span>
+        {variant === "drawer" && (
+          <button type="button" className="icon-btn detail-close" aria-label="Close details" onClick={() => setState({ drawer: null })}>
+            <X size={16} />
+          </button>
+        )}
       </div>
-
+      <div className="detail-title-row">
+        {renaming ? <NameEditor s={s} className="detail-title" onDone={() => setRenaming(false)} /> : <h2 className="detail-title">{s.name}</h2>}
+        {!renaming && <RenameButton s={s} onClick={() => setRenaming(true)} />}
+      </div>
+      {compact ? (
+        // A native tip: the line clips anything drawn outside it.
+        <p className="detail-line" title={s.summary.headline}>
+          {(a.kind === "working" && a.detail) || s.summary.now || (s.nameSource !== "summary" ? s.summary.headline : "")}
+        </p>
+      ) : (
+        <>
+          {s.nameSource !== "summary" && <p className="detail-headline">{s.summary.headline}</p>}
+          {s.summary.now && <p className="detail-now">{s.summary.now}</p>}
+          {a.detail && a.kind === "working" && <p className="detail-doing">{a.detail}</p>}
+        </>
+      )}
+    </div>
+  );
+  const asks = (
+    <>
       {a.kind === "approval" && <ApprovalCard s={s} />}
       {a.kind === "question" && <QuestionCard s={s} />}
-
-      <div className="detail-actions">
-        {!tmuxName && (
-          <button type="button" className="btn btn-primary" onClick={() => void act(`${s.pid}:focus`, `/api/sessions/${s.pid}/focus`, {}, true)}>
-            <CodeXml size={15} /> Open in {openIn}
-          </button>
-        )}
-        <RemoteButton s={s} look="button" />
-        {s.pr && (
-          <button type="button" className="btn btn-ghost" onClick={() => openUrl(s.pr!.url)}>
-            <GitPullRequest size={15} /> PR #{s.pr.number}
-          </button>
-        )}
-        {s.story && (
-          <button type="button" className="btn btn-ghost" onClick={() => openUrl(s.story!.url)}>
-            <SquareKanban size={15} /> Story
-          </button>
-        )}
-        <button type="button" className="btn btn-ghost btn-icon" data-tip="Show the folder in Finder" aria-label="Folder" onClick={() => void api("/api/open", { folder: g?.root ?? s.cwd })}>
-          <FolderOpen size={15} />
+    </>
+  );
+  const actions = (
+    <div className="detail-actions">
+      {!tmuxName && (
+        <button type="button" className="btn btn-primary" onClick={() => void act(`${s.pid}:focus`, `/api/sessions/${s.pid}/focus`, {}, true)}>
+          <CodeXml size={15} /> Open in {openIn}
         </button>
-        {variant !== "popout" && (
-          <button type="button" className="btn btn-ghost btn-icon" data-tip="Pop out to its own window" aria-label="Pop out" onClick={() => popoutSession(s.pid)}>
-            <PictureInPicture2 size={15} />
-          </button>
-        )}
-        <button type="button" className="btn btn-danger-ghost detail-close-btn" onClick={() => setState({ closing: s.pid })}>
-          <X size={15} /> Close…
+      )}
+      <RemoteButton s={s} look="button" />
+      {s.pr && (
+        <button type="button" className="btn btn-ghost" onClick={() => openUrl(s.pr!.url)}>
+          <GitPullRequest size={15} /> PR #{s.pr.number}
         </button>
-      </div>
+      )}
+      {s.story && (
+        <button type="button" className="btn btn-ghost" onClick={() => openUrl(s.story!.url)}>
+          <SquareKanban size={15} /> Story
+        </button>
+      )}
+      <button type="button" className="btn btn-ghost btn-icon" data-tip="Show the folder in Finder" aria-label="Folder" onClick={() => void api("/api/open", { folder: g?.root ?? s.cwd })}>
+        <FolderOpen size={15} />
+      </button>
+      {variant !== "popout" && (
+        <button type="button" className="btn btn-ghost btn-icon" data-tip="Pop out to its own window" aria-label="Pop out" onClick={() => popoutSession(s.pid)}>
+          <PictureInPicture2 size={15} />
+        </button>
+      )}
+      <button type="button" className="btn btn-danger-ghost detail-close-btn" onClick={() => setState({ closing: s.pid })}>
+        <X size={15} /> Close…
+      </button>
+    </div>
+  );
+  return (
+    <div className={`detail detail-${variant} st-${a.kind} console-${consoleView} ${consoleHeight ? "console-sized" : ""}`}>
+      {compact ? (
+        <div className="detail-top">
+          {head}
+          {actions}
+        </div>
+      ) : (
+        <>
+          {head}
+          {asks}
+          {actions}
+        </>
+      )}
+      {compact && asks}
 
       {tmuxName && (
         <div className="detail-console">
-          <ConsoleFrame sides={variant === "drawer" && consoleView === "normal"} height={consoleHeight}>
+          <ConsoleFrame edges={consoleView !== "normal" || variant === "popout" ? "none" : variant === "drawer" ? "all" : "ends"} height={consoleHeight}>
             <Suspense fallback={<div className="console" />}>
               <Console
                 name={tmuxName}

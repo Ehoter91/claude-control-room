@@ -3326,29 +3326,29 @@ body.is-resizing .drawer {
   pointer-events: none;
 }
 .monitor[data-drop]::after {
-  top: 8px;
-  bottom: 8px;
+  top: 10px;
+  bottom: 10px;
   width: 4px;
 }
 .monitor[data-drop="before"]::after {
-  left: -9px;
+  left: 4px;
 }
 .monitor[data-drop="after"]::after {
-  right: -9px;
+  right: 4px;
 }
 .focus-row {
   position: relative;
 }
 .focus-row[data-drop]::after {
-  left: 6px;
-  right: 6px;
+  left: 8px;
+  right: 8px;
   height: 3px;
 }
 .focus-row[data-drop="before"]::after {
-  top: -3px;
+  top: 2px;
 }
 .focus-row[data-drop="after"]::after {
-  bottom: -3px;
+  bottom: 2px;
 }
 
 /* The console's edges and corners: drag them like a window's */
@@ -3360,7 +3360,7 @@ body.is-resizing .drawer {
   min-height: 0;
 }
 .detail.console-sized .detail-console {
-  flex: none;
+  flex: 0 1 auto;
   min-height: 0;
   flex-direction: column;
 }
@@ -3456,4 +3456,59 @@ body.is-resizing .drawer {
 }
 .console-edge:hover::after {
   background: rgba(122, 162, 255, 0.6);
+}
+
+/* Focus layout with a console: the header is one row with the buttons beside it, so the console gets the room */
+.detail-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 16px 10px 22px;
+  border-bottom: 1px solid var(--line);
+  background: radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%);
+}
+.detail-head.is-compact {
+  flex: 1 1 360px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0;
+  background: none;
+}
+.detail-head.is-compact .detail-status {
+  flex: none;
+  font-size: 13px;
+}
+.detail-head.is-compact .detail-title-row {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
+  align-items: center;
+  margin-top: 0;
+}
+.detail-head.is-compact .detail-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+}
+.detail-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.detail-top > .detail-actions {
+  flex: none;
+  flex-wrap: nowrap;
+  padding: 0;
+  border-bottom: none;
+}
+.detail-focus.console-normal:not(.console-sized) .detail-top ~ .detail-body.is-compact {
+  max-height: 24%;
 }

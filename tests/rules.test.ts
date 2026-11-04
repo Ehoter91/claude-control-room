@@ -66,6 +66,8 @@ describe("transcript", () => {
       line({ type: "user", message: { content: "Go" }, timestamp: "2026-11-01T10:00:00Z" }),
       line({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t", content: "ok" }] }, timestamp: "2026-11-01T10:09:00Z" }),
       line({ type: "user", isMeta: true, message: { content: "Caveat" }, timestamp: "2026-11-01T10:10:00Z" }),
+      // Claude Code's own summary when it compacts is written as a user message.
+      line({ type: "user", isCompactSummary: true, isVisibleInTranscriptOnly: true, message: { content: "This session is being continued" }, timestamp: "2026-11-01T10:20:00Z" }),
     ]);
     expect(s.lastPromptAt).toBe(Date.parse("2026-11-01T10:00:00Z"));
   });

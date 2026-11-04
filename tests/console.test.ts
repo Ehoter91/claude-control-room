@@ -80,7 +80,19 @@ describe("hosted sessions", () => {
     expect(order.sortKey("b", 0)).toBe(3_000 - 60_000);
     await order.place("c", null, 9_000);
     expect(order.sortKey("c", 0)).toBeGreaterThanOrEqual(Date.now() - 1_000);
-    expect(JSON.parse(readFileSync(join(home, ".claude-control-room", "order.json"), "utf8"))).toHaveProperty("a.key", 2_000);
+    order.noteUsed("b");
+    expect(order.usedAt("b")).toBeGreaterThan(0);
+    await order.place("d", null, null); // waits for the write that also carries b's use
+    const saved = JSON.parse(readFileSync(join(home, ".claude-control-room", "order.json"), "utf8"));
+    expect(saved).toHaveProperty("placed.a.key", 2_000);
+    expect(saved.used.b).toBe(order.usedAt("b"));
+    expect(order.keyBetween(3_000, 1_000, 0)).toBe(2_000);
+  });
+
+  it("tells typing apart from what the terminal reports by itself", () => {
+    for (const reports of ["\x1b[I", "\x1b[O", "\x1b[<0;12;4M\x1b[<0;12;4m", "\x1b[M !!"]) expect(consoles.isTyping(reports)).toBe(false);
+    for (const typed of ["a", "\r", "\x1b", "\x1b[A", "\x1b[Ihi"]) expect(consoles.isTyping(typed)).toBe(true);
+    expect(consoles.isTyping(7)).toBe(false);
   });
 
   it("finds your last message even when much tool output came after it", async () => {
