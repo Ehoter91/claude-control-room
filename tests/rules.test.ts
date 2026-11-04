@@ -60,6 +60,16 @@ describe("transcript", () => {
     expect(s.pending).toEqual([]);
   });
 
+  it("knows when you last sent a message, and not when a tool answered", () => {
+    const s = emptyState("/x.jsonl");
+    applyLines(s, [
+      line({ type: "user", message: { content: "Go" }, timestamp: "2026-11-01T10:00:00Z" }),
+      line({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t", content: "ok" }] }, timestamp: "2026-11-01T10:09:00Z" }),
+      line({ type: "user", isMeta: true, message: { content: "Caveat" }, timestamp: "2026-11-01T10:10:00Z" }),
+    ]);
+    expect(s.lastPromptAt).toBe(Date.parse("2026-11-01T10:00:00Z"));
+  });
+
   it("knows the permission mode of the last message", () => {
     const s = emptyState("/x.jsonl");
     applyLines(s, [line({ type: "permission-mode", permissionMode: "plan" })]);

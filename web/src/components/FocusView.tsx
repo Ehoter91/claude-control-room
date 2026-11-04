@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import type { Session } from "../../../shared/types.ts";
+import { useDragOrder } from "../lib/dragOrder.ts";
 import { duration } from "../lib/format.ts";
 import { needsYou, setState, useStore } from "../store.ts";
 import { StatusOrb, useNow } from "./Primitives.tsx";
@@ -10,12 +11,13 @@ export function FocusView({ sessions }: { sessions: Session[] }) {
   const selected = useStore((s) => s.selected);
   const now = useNow();
   const current = sessions.find((s) => s.pid === selected) ?? sessions.find(needsYou) ?? sessions[0] ?? null;
+  const dragRef = useDragOrder(sessions, ".focus-row", "y");
   return (
     <div className="focus">
       <div className="focus-main">
         {current ? <SessionDetail s={current} variant="focus" /> : <div className="wall-empty"><h3>No session to show</h3></div>}
       </div>
-      <nav className="focus-list" aria-label="Sessions">
+      <nav className="focus-list" aria-label="Sessions" ref={dragRef}>
         {sessions.map((s, i) => (
           <motion.button
             layout
@@ -23,6 +25,8 @@ export function FocusView({ sessions }: { sessions: Session[] }) {
             type="button"
             className={`focus-row st-${s.activity.kind} ${current?.pid === s.pid ? "is-on" : ""}`}
             onClick={() => setState({ selected: s.pid })}
+            data-pid={s.pid}
+            draggable
           >
             <span className="mon-key">{i < 9 ? i + 1 : ""}</span>
             <StatusOrb kind={s.activity.kind} size={9} />

@@ -106,6 +106,8 @@ export interface Session {
   cwd: string;
   startedAt: number;
   lastActivityAt: number;
+  lastUsedAt: number; // when you last sent it a message or did something to it here
+  sortKey: number; // the list runs from the biggest down: lastUsedAt, or where you dropped the card
   activity: Activity;
   summary: Summary;
   firstPrompt: string | null;

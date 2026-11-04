@@ -311,6 +311,7 @@ export function Monitor({ s, index, selected }: { s: Session; index: number; sel
       className={`monitor st-${a.kind} ${selected ? "is-selected" : ""} ${a.askedYou ? "asked-you" : ""}`}
       onClick={() => setState({ drawer: s.pid, selected: s.pid })}
       data-pid={s.pid}
+      draggable
     >
       <div className="mon-screen" aria-hidden />
       <header className="mon-head">

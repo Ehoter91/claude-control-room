@@ -3306,3 +3306,154 @@ body.is-resizing .drawer {
   display: flex;
   gap: 8px;
 }
+
+/* Dragging a session's card or row to another place in the list */
+.monitor[draggable="true"] {
+  -webkit-user-drag: element;
+}
+.monitor[data-dragging],
+.focus-row[data-dragging] {
+  opacity: 0.35;
+}
+.monitor[data-drop]::after,
+.focus-row[data-drop]::after {
+  content: "";
+  position: absolute;
+  z-index: 5;
+  border-radius: 3px;
+  background: var(--idle, #7aa2ff);
+  box-shadow: 0 0 14px rgba(122, 162, 255, 0.8);
+  pointer-events: none;
+}
+.monitor[data-drop]::after {
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+}
+.monitor[data-drop="before"]::after {
+  left: -9px;
+}
+.monitor[data-drop="after"]::after {
+  right: -9px;
+}
+.focus-row {
+  position: relative;
+}
+.focus-row[data-drop]::after {
+  left: 6px;
+  right: 6px;
+  height: 3px;
+}
+.focus-row[data-drop="before"]::after {
+  top: -3px;
+}
+.focus-row[data-drop="after"]::after {
+  bottom: -3px;
+}
+
+/* The console's edges and corners: drag them like a window's */
+.console-frame {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+.detail.console-sized .detail-console {
+  flex: none;
+  min-height: 0;
+  flex-direction: column;
+}
+.detail.console-sized .detail-console .console {
+  min-height: 0;
+}
+.detail.console-sized .detail-body.is-compact {
+  flex: 1;
+  max-height: none;
+}
+.console-edge {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+.edge-n,
+.edge-s {
+  left: 14px;
+  right: 14px;
+  height: 10px;
+  cursor: ns-resize;
+}
+.edge-n {
+  top: -5px;
+}
+.edge-s {
+  bottom: -5px;
+}
+.edge-e,
+.edge-w {
+  top: 14px;
+  bottom: 14px;
+  width: 10px;
+  cursor: ew-resize;
+}
+.edge-e {
+  right: -5px;
+}
+.edge-w {
+  left: -5px;
+}
+.edge-ne,
+.edge-nw,
+.edge-se,
+.edge-sw {
+  width: 16px;
+  height: 16px;
+}
+.edge-ne {
+  top: -6px;
+  right: -6px;
+  cursor: nesw-resize;
+}
+.edge-sw {
+  bottom: -6px;
+  left: -6px;
+  cursor: nesw-resize;
+}
+.edge-nw {
+  top: -6px;
+  left: -6px;
+  cursor: nwse-resize;
+}
+.edge-se {
+  bottom: -6px;
+  right: -6px;
+  cursor: nwse-resize;
+}
+/* A thin line shows which edge the pointer holds */
+.edge-n::after,
+.edge-s::after,
+.edge-e::after,
+.edge-w::after {
+  content: "";
+  position: absolute;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.edge-n::after,
+.edge-s::after {
+  left: 0;
+  right: 0;
+  top: 4px;
+  height: 2px;
+}
+.edge-e::after,
+.edge-w::after {
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+}
+.console-edge:hover::after {
+  background: rgba(122, 162, 255, 0.6);
+}

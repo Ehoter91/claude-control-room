@@ -18,6 +18,7 @@ import { bridgeIdOf, remoteUrl } from "./remote.ts";
 import { findStoryId, shortcutReady, story as storyFor } from "./shortcut.ts";
 import { defaultEffort, latestUsage, readPermission, readTap, statusLineState } from "./statusline.ts";
 import { maybeSummarize, storedSummary } from "./summaries.ts";
+import { sortKey } from "./order.ts";
 import { updateState } from "./update.ts";
 import { pickName, savedName, tabName } from "./names.ts";
 import { modelName, readTranscript, type TranscriptState } from "./transcript.ts";
@@ -100,6 +101,13 @@ export async function findTranscript(sessionId: string, cwd: string, fresh = fal
   }
   transcriptPaths.set(sessionId, { path: found, at: Date.now() });
   return found;
+}
+
+// What you last did to a session from Control Room: typed in its console, answered it, changed its model.
+const usedHere = new Map<string, number>();
+
+export function noteUsed(sessionId: string): void {
+  usedHere.set(sessionId, Date.now());
 }
 
 // A mode set from Control Room shows at once; the transcript only records a mode with the next message.
@@ -207,7 +215,9 @@ export class Monitor {
     for (const pid of [...this.transcripts.keys()]) if (!this.files.has(pid)) this.transcripts.delete(pid);
 
     const sessions = await Promise.all(live.map((f) => this.buildSession(f, procs).catch(() => null)));
-    const list = sessions.filter((s): s is Session => s !== null).sort((a, b) => b.startedAt - a.startedAt);
+    // The one you used last comes first, or where you dropped it. Claude's own work does not count, so the order holds
+    // still while sessions run.
+    const list = sessions.filter((s): s is Session => s !== null).sort((a, b) => b.sortKey - a.sortKey || b.startedAt - a.startedAt);
 
     const [usage, connection] = await Promise.all([latestUsage(), statusLineState()]);
     const windows = bridgeConnected();
@@ -331,6 +341,7 @@ export class Monitor {
     }
 
     const chat: ChatLine[] = t ? t.chat.slice(-PREVIEW_LINES) : [];
+    const lastUsedAt = Math.max(f.startedAt, t?.lastPromptAt ?? 0, usedHere.get(f.sessionId) ?? 0);
     const effort = tap?.effort ?? ask?.effort ?? t?.effort ?? this.effortDefault;
     return {
       pid: f.pid,
@@ -342,6 +353,8 @@ export class Monitor {
       cwd,
       startedAt: f.startedAt,
       lastActivityAt: Math.max(t?.lastEntryAt ?? 0, f.statusUpdatedAt ?? 0, f.updatedAt ?? 0) || f.startedAt,
+      lastUsedAt,
+      sortKey: sortKey(f.sessionId, lastUsedAt),
       activity,
       summary,
       firstPrompt: t?.firstPrompt ?? null,
