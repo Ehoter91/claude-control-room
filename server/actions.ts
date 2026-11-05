@@ -302,6 +302,13 @@ export async function focusSession(monitor: Monitor, pid: number): Promise<Actio
   return openInIde(target.ide, s.git?.root ?? s.cwd, !!s.git);
 }
 
+/** Opens the session's folder in the IDE from Settings, to see its changes. A session in a console here has no IDE of its own. */
+export async function openFolderInIde(monitor: Monitor, pid: number): Promise<ActionResult> {
+  const s = find(monitor, pid);
+  if (!s) return { ok: false, message: "That session is gone." };
+  return openInIde(settings().ide, s.git?.root ?? s.cwd, !!s.git);
+}
+
 /**
  * Renames the session's VS Code tab, and the tile takes the tab's name. A session outside VS Code keeps its name in
  * Control Room; an empty name there brings back the name Claude Code gives it.

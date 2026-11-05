@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { pathToFileURL } from "node:url";
 import { isEffort, isMode, modeName, MODELS } from "../shared/claude.ts";
 import { keyBetween } from "./order.ts";
-import { isIdeId, openTarget, targetName } from "../shared/ides.ts";
+import { ideName, isIdeId, openTarget, targetName } from "../shared/ides.ts";
 import type { ActionResult, Session, Settings, Snapshot, WorktreeReport } from "../shared/types.ts";
 import { demoClosePlan, DEMO_DEFAULT_COUNT, demoSnapshot, demoWorktrees } from "./demo-data.ts";
 import { body, refusal, send, serveStatic } from "./http.ts";
@@ -65,6 +65,8 @@ export async function startDemo(opts: { port?: number; sessions?: number } = {})
       }
       case "focus":
         return { ok: true, message: `In the app, this opens the session in ${targetName(openTarget(s, snap.settings.ide))}.` };
+      case "ide":
+        return { ok: true, message: `In the app, this opens its folder in ${ideName(snap.settings.ide)}.` };
       case "close":
         snap = { ...snap, sessions: snap.sessions.filter((x) => x.pid !== pid) };
         publish();
@@ -145,7 +147,7 @@ export async function startDemo(opts: { port?: number; sessions?: number } = {})
     }
     if (req.method !== "POST") return send(res, 404, { ok: false, message: "Not found" });
 
-    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename|move|model|effort|mode|place)$/.exec(p);
+    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|ide|close|remote|rename|move|model|effort|mode|place)$/.exec(p);
     if (m) {
       const out = await sessionAction(Number(m[1]), m[2], req);
       return send(res, out ? 200 : 404, out ?? { ok: false, message: "Unknown action" });
