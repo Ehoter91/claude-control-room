@@ -17,4 +17,5 @@ contextBridge.exposeInMainWorld("controlRoom", {
   loginItem: () => ipcRenderer.invoke("cr:login-item"),
   setLoginItem: (on) => ipcRenderer.invoke("cr:set-login-item", on),
   pickFolder: () => ipcRenderer.invoke("cr:pick-folder"),
+  copyText: (text) => ipcRenderer.invoke("cr:copy", text),
 });

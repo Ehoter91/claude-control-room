@@ -69,6 +69,17 @@ describe("hosted sessions", () => {
     expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ model: "opus", modelSettings: { "claude-opus-5-5": { effortLevel: "xhigh" } }, theme: "light" });
   });
 
+  it("knows Claude Code asking to confirm a model or effort switch", async () => {
+    const { ASKS_TO_SWITCH } = await import("../server/actions.ts");
+    const ask = (title: string, yes: string) =>
+      `❯ /x\n────\n  ${title}\n  Your next response will be slower and use more tokens\n  ❯ 1. Yes, ${yes}\n    2. No, go back\n`;
+    expect(ASKS_TO_SWITCH.test(ask("Switch model?", "switch to Sonnet 5.5"))).toBe(true);
+    expect(ASKS_TO_SWITCH.test(ask("Change effort level?", "switch to medium"))).toBe(true);
+    // Another question, or No chosen, gets no Enter.
+    expect(ASKS_TO_SWITCH.test(ask("Do you want to proceed?", "allow"))).toBe(false);
+    expect(ASKS_TO_SWITCH.test("  Switch model?\n    1. Yes, switch to Sonnet 5.5\n  ❯ 2. No, go back\n")).toBe(false);
+  });
+
   it("keeps a dropped card where it was dropped, until the session is used again", async () => {
     const order = await import("../server/order.ts");
     expect(order.sortKey("a", 5_000)).toBe(5_000);

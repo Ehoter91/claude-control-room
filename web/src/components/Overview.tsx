@@ -1,7 +1,7 @@
 import { ArrowUpRight, Check, CircleCheck, Coffee, FolderGit2, Moon, RefreshCw, Sparkles, UserRound } from "lucide-react";
 import type { RateWindow, Session, Snapshot } from "../../../shared/types.ts";
 import { duration, plural, resetLabel } from "../lib/format.ts";
-import { act, needsYou, openSession, remember, setState, useStore, type Filter } from "../store.ts";
+import { act, needsYou, openMenu, openSession, remember, setState, useStore, type Filter } from "../store.ts";
 import { openUrl, PrChip } from "./Monitor.tsx";
 import { Meter, StatusOrb, Toggle, useNow } from "./Primitives.tsx";
 
@@ -63,7 +63,7 @@ function AttentionCard({ sessions }: { sessions: Session[] }) {
           {list.slice(0, 3).map((s) => {
             const reachable = s.vscodeLinked || !!s.tmux;
             return (
-              <li key={s.pid} className="attn-row" onClick={() => setState({ drawer: s.pid, selected: s.pid })}>
+              <li key={s.pid} className="attn-row" onClick={() => setState({ drawer: s.pid, selected: s.pid })} onContextMenu={(e) => openMenu(e, s.pid)}>
                 <StatusOrb kind={s.activity.kind} size={9} />
                 <div className="attn-text">
                   <span className="attn-name">{s.name}</span>

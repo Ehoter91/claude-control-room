@@ -8,7 +8,7 @@ import { deriveActivity, type StatusFile } from "./activity.ts";
 import { claimsOf, repoClaims } from "./claims.ts";
 import { publicSettings, settings } from "./config.ts";
 import { gitInfo } from "./git.ts";
-import { ghReady, prByNumber, prForBranch, refreshRepo } from "./github.ts";
+import { ghReady, openSince, prByNumber, prForBranch, refreshRepo } from "./github.ts";
 import { hostedName, hostedSessions, tmuxReady } from "./hosted.ts";
 import { ideOf, installedIdes } from "./ide.ts";
 import { CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, SUMMARIZER_CWD } from "./paths.ts";
@@ -259,7 +259,11 @@ export class Monitor {
       const slug = `${git.remote.owner}/${git.remote.name}`;
       refreshRepo(slug, 60_000);
       const isMain = !git.branch || git.branch === "main" || git.branch === "master";
-      pr = (isMain ? null : prForBranch(slug, git.branch)) ?? (tap?.pr ? prByNumber(slug, tap.pr.number) : null);
+      // Sessions in one checkout share its branch, so its PR goes only to the session that made, committed or pushed
+      // that branch. A worktree has one session; its PR counts unless it was done before the session started.
+      const branchPr = isMain ? null : (prForBranch(slug, git.branch) ?? (tap?.pr ? prByNumber(slug, tap.pr.number) : null));
+      const worked = !!git.branch && !!t?.workedBranches.includes(git.branch);
+      pr = worked ? branchPr : git.isWorktree ? openSince(branchPr, f.startedAt) : null;
       if (!pr && t?.prLink && t.prLink.repo.toLowerCase() === slug.toLowerCase()) pr = prByNumber(slug, t.prLink.number);
     }
 

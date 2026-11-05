@@ -7,7 +7,7 @@ import { ideOf, openInIde } from "../server/ide.ts";
 import { cleanName, MAX_NAME, pickName, tabName, type NameParts } from "../server/names.ts";
 import { etimeSeconds, loginAgeFrom } from "../server/proc.ts";
 import { bridgeIdOf, CLEAR_DRAFT, REMOTE_COMMAND, remoteRefusal, remoteUrl } from "../server/remote.ts";
-import { summarizeChecks } from "../server/github.ts";
+import { openSince, type PrRow, summarizeChecks } from "../server/github.ts";
 import { findStoryId } from "../server/shortcut.ts";
 import { HOOK_BODY, tapScript, withConnection, withoutConnection } from "../server/statusline.ts";
 import { HOOK_SCRIPT, TAP_SCRIPT } from "../server/paths.ts";
@@ -35,6 +35,20 @@ describe("transcript", () => {
     expect(userText({ message: { content: "hi <system-reminder>secret</system-reminder>" } })).toBe("hi");
     expect(userText({ message: { content: [{ type: "tool_result", content: "x" }] } })).toBeNull();
     expect(userText({ message: { content: "[Request interrupted by user]" } })).toBe("⏹ Interrupted");
+  });
+
+  it("knows which branches the session itself worked on", () => {
+    const s = emptyState("/x.jsonl");
+    const bash = (command: string, gitBranch: string) =>
+      line({ type: "assistant", gitBranch, message: { content: [{ type: "tool_use", id: command, name: "Bash", input: { command } }] } });
+    applyLines(s, [
+      bash("git status && git log -3", "26012_old_work"),
+      bash("git switch -c 27001_new && git commit -am wip", "main"),
+      line({ type: "user", gitBranch: "27002_fix", message: { content: "<bash-input>git push -u origin 27002_fix</bash-input>" } }),
+      bash("gh pr view 1450", "26012_old_work"),
+    ]);
+    // Looking at a branch is not working on it; a commit after `switch -c` lands on the new branch.
+    expect(s.workedBranches).toEqual(["27001_new", "27002_fix"]);
   });
 
   it("tracks titles, PR links, effort, model and unanswered tool calls", () => {
@@ -249,6 +263,17 @@ describe("small parsers", () => {
     expect(summarizeChecks([{ status: "COMPLETED", conclusion: "SUCCESS" }, { status: "IN_PROGRESS" }]).state).toBe("pending");
     expect(summarizeChecks([{ status: "COMPLETED", conclusion: "FAILURE" }]).state).toBe("failing");
     expect(summarizeChecks([]).state).toBe("none");
+  });
+
+  it("drops a branch's PR that was done before the session started", () => {
+    const started = Date.parse("2026-11-04T15:12:29Z");
+    const pr = (state: PrRow["state"], mergedAt: string | null, updatedAt: string) => ({ number: 1450, state, mergedAt, updatedAt }) as PrRow;
+    // The checkout was left on a branch whose PR merged earlier: that work isn't this session's.
+    expect(openSince(pr("MERGED", "2026-11-04T14:29:29Z", "2026-11-04T14:29:30Z"), started)).toBeNull();
+    expect(openSince(pr("CLOSED", null, "2026-11-03T09:00:00Z"), started)).toBeNull();
+    expect(openSince(pr("MERGED", "2026-11-04T16:00:00Z", "2026-11-04T16:00:00Z"), started)?.number).toBe(1450);
+    expect(openSince(pr("OPEN", null, "2026-10-01T00:00:00Z"), started)?.number).toBe(1450);
+    expect(openSince(null, started)).toBeNull();
   });
 });
 

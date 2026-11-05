@@ -21,6 +21,7 @@ export interface TranscriptState {
   prLink: { number: number; url: string; repo: string } | null;
   worktreePath: string | null;
   worktreeBranch: string | null;
+  workedBranches: string[]; // branches this session made, committed to, pushed or opened a PR from
   cwd: string | null;
   branch: string | null;
   model: string | null; // raw model id, e.g. "claude-opus-5-5"
@@ -52,6 +53,7 @@ export function emptyState(path: string): TranscriptState {
     prLink: null,
     worktreePath: null,
     worktreeBranch: null,
+    workedBranches: [],
     cwd: null,
     branch: null,
     model: null,
@@ -270,6 +272,19 @@ function readCommandOutput(state: TranscriptState, content: string): void {
   if (effort) state.effort = effort[1].toLowerCase();
 }
 
+// A command that makes a branch puts what follows on it; any other commit, push or new PR is on the branch it ran on.
+const BRANCH_MADE = /\bgit\s+(?:checkout\s+-[bB]|switch\s+(?:-[cC]|--create|--force-create))\s+([^\s;&|]+)/g;
+const BRANCH_WORK = /\bgit\s+(?:commit|push)\b|\bgh\s+pr\s+create\b/;
+
+/** Notes the branches a shell command worked on, from Claude or typed after `!`. */
+function noteBranchWork(state: TranscriptState, command: string, branch: unknown): void {
+  const made = [...command.matchAll(BRANCH_MADE)].map((m) => m[1]);
+  const worked = made.length ? made : typeof branch === "string" && branch && BRANCH_WORK.test(command) ? [branch] : [];
+  for (const b of worked) {
+    state.workedBranches = [...state.workedBranches.filter((x) => x !== b), b].slice(-20);
+  }
+}
+
 function applyUser(state: TranscriptState, e: Entry): void {
   const content = e.message?.content;
   if (Array.isArray(content)) {
@@ -286,6 +301,7 @@ function applyUser(state: TranscriptState, e: Entry): void {
     if (!Number.isNaN(at)) state.modeAt = at;
   }
   const said = userText(e);
+  if (said?.startsWith("! ")) noteBranchWork(state, said.slice(2), e.gitBranch);
   if (said) {
     state.pending = [];
     state.chat.push({ role: "user", text: said, at: e.timestamp ?? null });
@@ -310,6 +326,7 @@ function applyAssistant(state: TranscriptState, e: Entry): void {
     } else if (block?.type === "tool_use" && typeof block.id === "string") {
       const use: ToolUse = { id: block.id, name: String(block.name ?? "tool"), input: block.input ?? {}, at: e.timestamp ?? null };
       state.pending.push(use);
+      if (use.name === "Bash" && typeof use.input.command === "string") noteBranchWork(state, use.input.command, e.gitBranch);
       const p = describeTool(use.name, use.input);
       state.chat.push({ role: "tool", text: p.detail ? `${p.action}: ${p.detail}` : p.action, at: use.at });
     }

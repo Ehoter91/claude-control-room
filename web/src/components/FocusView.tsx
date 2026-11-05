@@ -2,13 +2,14 @@ import { motion } from "motion/react";
 import type { Session } from "../../../shared/types.ts";
 import { useDragOrder } from "../lib/dragOrder.ts";
 import { duration } from "../lib/format.ts";
-import { needsYou, setState, useStore } from "../store.ts";
+import { needsYou, openMenu, setState, useStore } from "../store.ts";
 import { StatusOrb, useNow } from "./Primitives.tsx";
 import { SessionDetail } from "./SessionDetail.tsx";
 
 /** One session large on the left; every other session as a slim row on the right. */
 export function FocusView({ sessions }: { sessions: Session[] }) {
   const selected = useStore((s) => s.selected);
+  const menuPid = useStore((s) => s.menu?.pid);
   const now = useNow();
   const current = sessions.find((s) => s.pid === selected) ?? sessions.find(needsYou) ?? sessions[0] ?? null;
   const dragRef = useDragOrder(sessions, ".focus-row", "y");
@@ -23,8 +24,9 @@ export function FocusView({ sessions }: { sessions: Session[] }) {
             layout
             key={s.sessionId}
             type="button"
-            className={`focus-row st-${s.activity.kind} ${current?.pid === s.pid ? "is-on" : ""}`}
+            className={`focus-row st-${s.activity.kind} ${current?.pid === s.pid ? "is-on" : ""} ${menuPid === s.pid ? "has-menu" : ""}`}
             onClick={() => setState({ selected: s.pid })}
+            onContextMenu={(e) => openMenu(e, s.pid)}
             data-pid={s.pid}
             draggable
           >

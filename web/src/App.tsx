@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { type PointerEvent as ReactPointerEvent, useEffect } from "react";
 import type { Session } from "../../shared/types.ts";
 import { CloseDialog } from "./components/CloseDialog.tsx";
+import { SessionMenu } from "./components/SessionMenu.tsx";
 import { NewSessionDialog } from "./components/NewSessionDialog.tsx";
 import { Overview } from "./components/Overview.tsx";
 import { SessionDetail } from "./components/SessionDetail.tsx";
@@ -61,6 +62,8 @@ function useKeyboard(visible: Session[]) {
       // An open menu took this key already.
       if (e.defaultPrevented || target.closest("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
       const st = getState();
+      // A session's menu is open: its keys are for that session, not the selected one.
+      if (st.menu) return;
       if (e.key === "Escape") {
         // The new-session dialog decides for itself: it may hold a console that still waits for an answer.
         if (st.panel === "new") return;
@@ -172,6 +175,7 @@ export function App() {
       {panel === "settings" && <SettingsPanel snap={snap} />}
       {panel === "worktrees" && <WorktreesPanel />}
       {panel === "new" && <NewSessionDialog snap={snap} />}
+      <SessionMenu />
       <Toasts />
     </div>
   );

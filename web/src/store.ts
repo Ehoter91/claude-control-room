@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { type MouseEvent, useSyncExternalStore } from "react";
 import { hostedName } from "../../shared/hosted.ts";
 import { openTarget, targetName } from "../../shared/ides.ts";
 import type { ActionResult, Session, Snapshot, StatusKind } from "../../shared/types.ts";
@@ -27,6 +27,7 @@ export interface State {
   consoleView: ConsoleView;
   drawerWidths: Record<string, number>; // dragged widths of the details panel, with a console and without one
   consoleHeight: number | null; // dragged height of a console in its details; null fills the room
+  menu: { pid: number; x: number; y: number } | null; // a session's right-click menu, where it opened
 }
 
 /** How a session's console shows: in its details, folded to its bar, or filling the window. */
@@ -71,6 +72,7 @@ let state: State = {
   consoleView: "normal",
   drawerWidths: stored<Record<string, number>>("cr.drawerWidths", {}),
   consoleHeight: stored<number | null>("cr.consoleHeight", null),
+  menu: null,
 };
 const listeners = new Set<() => void>();
 
@@ -103,6 +105,14 @@ export function useOpenName(s: Session): string {
 export function openSession(s: Session): void {
   if (s.hosted) setState({ drawer: s.pid, selected: s.pid, typeInto: s.pid });
   else void act(`${s.pid}:focus`, `/api/sessions/${s.pid}/focus`, {}, true);
+}
+
+/** Opens a session's menu where you right-clicked; a name being typed keeps the usual text menu. */
+export function openMenu(e: MouseEvent, pid: number): void {
+  if ((e.target as HTMLElement).closest("input, textarea")) return;
+  e.preventDefault();
+  e.stopPropagation();
+  setState({ menu: { pid, x: e.clientX, y: e.clientY } });
 }
 
 /** The tmux session behind a session that runs here, from Claude Code's "name:@window.%pane". */
