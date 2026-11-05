@@ -101,8 +101,8 @@ export function prForBranch(slug: string, branch: string | null): PrRow | null {
 }
 
 /**
- * The PR of a session's branch, unless it was merged or closed before the session started. Then the checkout was only
- * left on an older branch, and the PR is that earlier work, not this session's.
+ * The PR of a worktree's branch, unless it was merged or closed before the session in it started. Then the worktree
+ * was only left on an older branch, and the PR is that earlier work, not this session's.
  */
 export function openSince(pr: PrRow | null, startedAt: number): PrRow | null {
   return pr && (pr.state === "OPEN" || Date.parse(pr.mergedAt ?? pr.updatedAt) >= startedAt) ? pr : null;

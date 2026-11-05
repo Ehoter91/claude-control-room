@@ -259,7 +259,11 @@ export class Monitor {
       const slug = `${git.remote.owner}/${git.remote.name}`;
       refreshRepo(slug, 60_000);
       const isMain = !git.branch || git.branch === "main" || git.branch === "master";
-      pr = openSince(isMain ? null : prForBranch(slug, git.branch), f.startedAt) ?? openSince(tap?.pr ? prByNumber(slug, tap.pr.number) : null, f.startedAt);
+      // Sessions in one checkout share its branch, so its PR goes only to the session that made, committed or pushed
+      // that branch. A worktree has one session; its PR counts unless it was done before the session started.
+      const branchPr = isMain ? null : (prForBranch(slug, git.branch) ?? (tap?.pr ? prByNumber(slug, tap.pr.number) : null));
+      const worked = !!git.branch && !!t?.workedBranches.includes(git.branch);
+      pr = worked ? branchPr : git.isWorktree ? openSince(branchPr, f.startedAt) : null;
       if (!pr && t?.prLink && t.prLink.repo.toLowerCase() === slug.toLowerCase()) pr = prByNumber(slug, t.prLink.number);
     }
 

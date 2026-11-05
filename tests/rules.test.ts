@@ -37,6 +37,20 @@ describe("transcript", () => {
     expect(userText({ message: { content: "[Request interrupted by user]" } })).toBe("⏹ Interrupted");
   });
 
+  it("knows which branches the session itself worked on", () => {
+    const s = emptyState("/x.jsonl");
+    const bash = (command: string, gitBranch: string) =>
+      line({ type: "assistant", gitBranch, message: { content: [{ type: "tool_use", id: command, name: "Bash", input: { command } }] } });
+    applyLines(s, [
+      bash("git status && git log -3", "26012_old_work"),
+      bash("git switch -c 27001_new && git commit -am wip", "main"),
+      line({ type: "user", gitBranch: "27002_fix", message: { content: "<bash-input>git push -u origin 27002_fix</bash-input>" } }),
+      bash("gh pr view 1450", "26012_old_work"),
+    ]);
+    // Looking at a branch is not working on it; a commit after `switch -c` lands on the new branch.
+    expect(s.workedBranches).toEqual(["27001_new", "27002_fix"]);
+  });
+
   it("tracks titles, PR links, effort, model and unanswered tool calls", () => {
     const s = emptyState("/x.jsonl");
     applyLines(s, [
