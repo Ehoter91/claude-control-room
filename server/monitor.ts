@@ -266,6 +266,15 @@ export class Monitor {
       pr = worked ? branchPr : git.isWorktree ? openSince(branchPr, f.startedAt) : null;
       if (!pr && t?.prLink && t.prLink.repo.toLowerCase() === slug.toLowerCase()) pr = prByNumber(slug, t.prLink.number);
     }
+    // Work it did in another folder, the latest first: that folder's branch has its PR.
+    for (const dir of [...(t?.workedFolders ?? [])].reverse()) {
+      if (pr) break;
+      const there = await gitInfo(dir, 60_000);
+      if (!there?.remote || !there.branch || there.branch === "main" || there.branch === "master") continue;
+      const slug = `${there.remote.owner}/${there.remote.name}`;
+      refreshRepo(slug, 60_000);
+      pr = prForBranch(slug, there.branch);
+    }
 
     const reg = git ? await repoClaims(git.mainRoot, this.isLiveClaude) : null;
     const claims = claimsOf(reg, f.pid, f.sessionId);

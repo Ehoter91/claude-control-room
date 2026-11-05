@@ -1,7 +1,9 @@
-import { tmpdir } from "node:os";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { deriveActivity, endsWithQuestion, type StatusFile } from "../server/activity.ts";
-import { cleanSettings } from "../server/config.ts";
+import { cleanSettings, folderSetting } from "../server/config.ts";
 import { parseRemote, parseShortstat } from "../server/git.ts";
 import { ideOf, openInIde } from "../server/ide.ts";
 import { cleanName, MAX_NAME, pickName, tabName, type NameParts } from "../server/names.ts";
@@ -11,7 +13,7 @@ import { openSince, type PrRow, summarizeChecks } from "../server/github.ts";
 import { findStoryId } from "../server/shortcut.ts";
 import { HOOK_BODY, tapScript, withConnection, withoutConnection } from "../server/statusline.ts";
 import { HOOK_SCRIPT, TAP_SCRIPT } from "../server/paths.ts";
-import { applyLines, describeTool, emptyState, modelName, userText } from "../server/transcript.ts";
+import { applyLines, describeTool, emptyState, modelName, readTranscript, userText } from "../server/transcript.ts";
 import { verdictFor, type WorktreeFacts } from "../server/worktrees.ts";
 import { isEffort, isMode, isModel, modeName, modelAlias } from "../shared/claude.ts";
 import { isIdeId, openTarget, targetName } from "../shared/ides.ts";
@@ -49,6 +51,37 @@ describe("transcript", () => {
     ]);
     // Looking at a branch is not working on it; a commit after `switch -c` lands on the new branch.
     expect(s.workedBranches).toEqual(["27001_new", "27002_fix"]);
+  });
+
+  it("puts work done after a cd in that folder, not on the session's branch", () => {
+    const s = emptyState("/x.jsonl");
+    const bash = (command: string) =>
+      line({ type: "assistant", cwd: "/code/shield", gitBranch: "26012_shared", message: { content: [{ type: "tool_use", id: command, name: "Bash", input: { command } }] } });
+    applyLines(s, [
+      line({ type: "user", cwd: "/code/shield", gitBranch: "26012_shared", message: { content: "<bash-input>cd ~/code/shield-26900 && git add x && git commit -m y && git push</bash-input>" } }),
+      bash("cd ../shield-27100 && git switch -c 27100_new"),
+      bash('git -C "/code/other repo" push'),
+      bash("cd /tmp && ls"),
+    ]);
+    expect(s.workedBranches).toEqual([]);
+    expect(s.workedFolders).toEqual([`${homedir()}/code/shield-26900`, "/code/shield-27100", "/code/other repo"]);
+  });
+
+  it("finds branch work from before the stretch it reads first", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "cr-tx-")), "s.jsonl");
+    const chat = (i: number) => line({ type: "assistant", cwd: "/code/shield", message: { content: [{ type: "text", text: `step ${i} ${"x".repeat(30_000)}` }] } });
+    writeFileSync(
+      file,
+      [
+        line({ type: "user", cwd: "/code/shield", gitBranch: "26012_shared", message: { content: "<bash-input>cd ../shield-26900 && git push</bash-input>" } }),
+        line({ type: "assistant", cwd: "/code/shield", gitBranch: "27001_mine", message: { content: [{ type: "tool_use", id: "a", name: "Bash", input: { command: "git commit -am fix" } }] } }),
+        ...Array.from({ length: 150 }, (_, i) => chat(i)),
+      ].join("\n") + "\n",
+    );
+    const s = await readTranscript(file);
+    expect(s?.chat.some((c) => c.text.startsWith("! cd"))).toBe(false); // outside what it read
+    expect(s?.workedFolders).toEqual(["/code/shield-26900"]);
+    expect(s?.workedBranches).toEqual(["27001_mine"]);
   });
 
   it("tracks titles, PR links, effort, model and unanswered tool calls", () => {
@@ -390,6 +423,13 @@ describe("Open in", () => {
     for (const v of ["notepad", "", null, 3]) expect(isIdeId(v)).toBe(false);
     expect(cleanSettings({ ide: "goland" as never }).ide).toBe("vscode");
     expect(cleanSettings({ ide: "zed" }).ide).toBe("zed");
+  });
+
+  it("takes only a real folder for Terminal, with ~ for home", () => {
+    expect(folderSetting("~")).toBe(homedir());
+    expect(folderSetting(` ${tmpdir()}/ `)).toBe(tmpdir());
+    for (const v of ["", "relative/path", "/no/such/folder", `${tmpdir()}/../${tmpdir().split("/").pop()}/nope`, 3, null]) expect(folderSetting(v)).toBeNull();
+    expect(folderSetting(import.meta.filename)).toBeNull(); // a file, not a folder
   });
 
   it("opens a session in its own IDE, and uses the Settings choice only outside one", () => {
