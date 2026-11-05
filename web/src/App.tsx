@@ -53,7 +53,6 @@ function Drawer({ s }: { s: Session | null }) {
 // Keys typed for another app can land here when this window takes focus, so the first moment is ignored.
 let focusedAt = Date.now();
 window.addEventListener("focus", () => (focusedAt = Date.now()));
-window.addEventListener("blur", () => setState({ selected: null }));
 
 function useKeyboard(visible: Session[]) {
   useEffect(() => {

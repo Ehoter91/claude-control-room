@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import { useEffect } from "react";
 import type { Session } from "../../../shared/types.ts";
 import { useDragOrder } from "../lib/dragOrder.ts";
 import { duration } from "../lib/format.ts";
@@ -9,9 +10,15 @@ import { SessionDetail } from "./SessionDetail.tsx";
 /** One session large on the left; every other session as a slim row on the right. */
 export function FocusView({ sessions }: { sessions: Session[] }) {
   const selected = useStore((s) => s.selected);
+  const all = useStore((s) => s.snapshot?.sessions) ?? sessions;
   const menuPid = useStore((s) => s.menu?.pid);
   const now = useNow();
-  const current = sessions.find((s) => s.pid === selected) ?? sessions.find(needsYou) ?? sessions[0] ?? null;
+  // The pick stays on show even when the filter no longer lists it.
+  const current = all.find((s) => s.pid === selected) ?? sessions.find(needsYou) ?? sessions[0] ?? null;
+  // Whatever is on show becomes the pick, so a re-sort or a new question doesn't swap it.
+  useEffect(() => {
+    if (current && current.pid !== selected) setState({ selected: current.pid });
+  }, [current?.pid, selected]);
   const dragRef = useDragOrder(sessions, ".focus-row", "y");
   return (
     <div className="focus-layout">
