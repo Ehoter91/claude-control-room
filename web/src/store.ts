@@ -106,6 +106,11 @@ export function useIdeName(): string {
   return useStore((st) => ideName(st.snapshot?.settings.ide ?? "vscode"));
 }
 
+/** A new Terminal window in the folder from Settings. */
+export function openTerminal(): Promise<ActionResult> {
+  return act("terminal", "/api/terminal", {}, true);
+}
+
 /** Opens the session's folder in the IDE from Settings, to see its changes. */
 export function openInIde(s: Session): Promise<ActionResult> {
   return act(`${s.pid}:ide`, `/api/sessions/${s.pid}/ide`, {}, true);

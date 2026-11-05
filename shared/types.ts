@@ -174,6 +174,7 @@ export interface Settings {
   inactiveAfterMinutes: number;
   includeIdePanel: boolean;
   ide: IdeId; // where "Open in …" opens a session
+  terminalFolder: string; // where "Terminal" opens a Terminal window
   layout: "fit" | "comfortable" | "focus";
   shortcutTokens: string[]; // masked when sent to the UI
 }

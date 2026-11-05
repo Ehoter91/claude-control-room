@@ -3681,3 +3681,7 @@ body.is-resizing .drawer {
   outline: 1px solid rgba(122, 162, 255, 0.6);
   outline-offset: -1px;
 }
+
+.set-folder {
+  width: 220px;
+}

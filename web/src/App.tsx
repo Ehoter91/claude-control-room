@@ -12,7 +12,7 @@ import { SetupBanner, TopBar } from "./components/TopBar.tsx";
 import { Wall, WallToolbar } from "./components/Wall.tsx";
 import { WorktreesPanel } from "./components/WorktreesPanel.tsx";
 import { clampWidth, dragFrom, type DrawerKind, keepSizes, setDrawerWidth } from "./lib/resize.ts";
-import { act, getState, matchesFilter, openSession, setState, useStore, VIEW } from "./store.ts";
+import { act, getState, matchesFilter, openSession, openTerminal, setState, useStore, VIEW } from "./store.ts";
 import { openUrl } from "./components/Monitor.tsx";
 
 function Drawer({ s }: { s: Session | null }) {
@@ -86,6 +86,10 @@ function useKeyboard(visible: Session[]) {
       }
       if (e.key.toLowerCase() === "n" && !VIEW.wallOnly) {
         setState({ panel: "new" });
+        return;
+      }
+      if (e.key.toLowerCase() === "t" && !VIEW.wallOnly) {
+        void openTerminal();
         return;
       }
       if (e.key.toLowerCase() === "f") {

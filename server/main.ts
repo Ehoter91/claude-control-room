@@ -16,6 +16,7 @@ import {
   newSession,
   openFolder,
   openFolderInIde,
+  openTerminal,
   openUrl,
   pruneWorktrees,
   removeWorktrees,
@@ -28,7 +29,7 @@ import {
 } from "./actions.ts";
 import { repoClaims } from "./claims.ts";
 import { checkForUpdate, onUpdateBuilt, startUpdate } from "./update.ts";
-import { loadSettings, saveSettings, settings } from "./config.ts";
+import { folderSetting, loadSettings, saveSettings, settings } from "./config.ts";
 import { listWorktrees } from "./git.ts";
 import { allPrs, checkGh } from "./github.ts";
 import { isTyping, resizeConsole, stopConsole, typeInConsole, watchConsole } from "./console.ts";
@@ -220,6 +221,8 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
         return send(res, 200, startUpdate());
       case "/api/sessions/new":
         return send(res, 200, await newSession(monitor, await body<Parameters<typeof newSession>[1]>(req)));
+      case "/api/terminal":
+        return send(res, 200, openTerminal());
       case "/api/open": {
         const b = await body<{ url?: string; folder?: string }>(req);
         if (b.url) return send(res, 200, openUrl(b.url));
@@ -236,6 +239,11 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
         if (typeof b.inactiveAfterMinutes === "number" && b.inactiveAfterMinutes >= 5) patch.inactiveAfterMinutes = b.inactiveAfterMinutes;
         if (b.layout === "fit" || b.layout === "comfortable" || b.layout === "focus") patch.layout = b.layout;
         if (isIdeId(b.ide)) patch.ide = b.ide;
+        if (b.terminalFolder !== undefined) {
+          const folder = folderSetting(b.terminalFolder);
+          if (!folder) return send(res, 200, { ok: false, message: `No folder at ${String(b.terminalFolder)}` });
+          patch.terminalFolder = folder;
+        }
         let message = "Saved";
         if (b.addShortcutToken) {
           const token = b.addShortcutToken.trim();

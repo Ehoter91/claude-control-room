@@ -1,8 +1,9 @@
+import { statSync } from "node:fs";
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, isAbsolute, normalize } from "node:path";
 import { isIdeId } from "../shared/ides.ts";
 import type { Settings } from "../shared/types.ts";
-import { CONFIG_FILE } from "./paths.ts";
+import { CONFIG_FILE, HOME } from "./paths.ts";
 
 export const DEFAULT_SETTINGS: Settings = {
   notifications: true,
@@ -11,6 +12,7 @@ export const DEFAULT_SETTINGS: Settings = {
   inactiveAfterMinutes: 120,
   includeIdePanel: false,
   ide: "vscode",
+  terminalFolder: HOME,
   layout: "fit",
   shortcutTokens: [],
 };
@@ -36,6 +38,18 @@ export async function loadSettings(): Promise<Settings> {
     current.shortcutTokens = [...current.shortcutTokens, envToken];
   }
   return current;
+}
+
+/** A folder typed in Settings, ~ for home, if it is a folder on this Mac. */
+export function folderSetting(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const path = raw.trim().replace(/^~(?=$|\/)/, HOME);
+  if (!isAbsolute(path)) return null;
+  try {
+    return statSync(path).isDirectory() ? normalize(path).replace(/(.)\/$/, "$1") : null;
+  } catch {
+    return null;
+  }
 }
 
 export function settings(): Settings {

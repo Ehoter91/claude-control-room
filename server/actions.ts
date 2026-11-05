@@ -3,7 +3,7 @@ import { isEffort, isMode, isModel, modeName, modelAlias, MODELS } from "../shar
 import { openTarget } from "../shared/ides.ts";
 import type { ActionResult, ClosePlan, CloseRequest, Session, WorktreeReport } from "../shared/types.ts";
 import { endClaim, forgetClaims, repoClaims } from "./claims.ts";
-import { settings } from "./config.ts";
+import { folderSetting, settings } from "./config.ts";
 import { git, listWorktrees } from "./git.ts";
 import { prForBranch, type PrRow } from "./github.ts";
 import { hostedName, hostedSessions, startSession, tmux, tmuxReady } from "./hosted.ts";
@@ -435,6 +435,14 @@ export function openUrl(url: string): ActionResult {
 export function openFolder(path: string): ActionResult {
   launch("open", [path]);
   return { ok: true, message: "Opened in Finder" };
+}
+
+/** A new Terminal window in the folder from Settings. `open` starts Terminal if it is not running, and asks nothing. */
+export function openTerminal(): ActionResult {
+  const folder = folderSetting(settings().terminalFolder);
+  if (!folder) return { ok: false, message: `That folder is gone: ${settings().terminalFolder}. Pick another in Settings.` };
+  launch("open", ["-a", "Terminal", folder]);
+  return { ok: true, message: "Opened Terminal" };
 }
 
 export async function worktreeReportFor(monitor: Monitor, s: Session): Promise<WorktreeReport | null> {

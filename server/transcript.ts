@@ -1,5 +1,7 @@
 import { open, stat } from "node:fs/promises";
+import { resolve } from "node:path";
 import type { ChatLine, QuestionPreview, ToolPreview } from "../shared/types.ts";
+import { HOME } from "./paths.ts";
 
 export interface ToolUse {
   id: string;
@@ -22,6 +24,7 @@ export interface TranscriptState {
   worktreePath: string | null;
   worktreeBranch: string | null;
   workedBranches: string[]; // branches this session made, committed to, pushed or opened a PR from
+  workedFolders: string[]; // other folders it did that in, as in `cd ../repo-2 && git push`
   cwd: string | null;
   branch: string | null;
   model: string | null; // raw model id, e.g. "claude-opus-5-5"
@@ -54,6 +57,7 @@ export function emptyState(path: string): TranscriptState {
     worktreePath: null,
     worktreeBranch: null,
     workedBranches: [],
+    workedFolders: [],
     cwd: null,
     branch: null,
     model: null,
@@ -120,6 +124,8 @@ async function firstRead(state: TranscriptState, size: number): Promise<void> {
     state.offset = start + begin;
     return;
   }
+  // Branch work from before that stretch still says whose PR is whose; it comes first, as it happened first.
+  if (start + begin > 0) await branchWorkBefore(state, start + begin);
   applyLines(state, buf.subarray(begin, end).toString("utf8").split("\n"));
   state.offset = start + end + 1;
   // A long turn of tool output can push your last message out of that stretch. The list's order needs its time.
@@ -148,6 +154,27 @@ async function lastPromptBefore(path: string, end: number): Promise<number | nul
     }
   }
   return null;
+}
+
+/** Notes the branch work in bytes 0 to `end`. Only a line with a commit, push or new branch in it is parsed. */
+async function branchWorkBefore(state: TranscriptState, end: number): Promise<void> {
+  let carry = Buffer.alloc(0); // the start of a line whose end is in the next chunk
+  for (let from = 0; from < end; from += CHUNK) {
+    const buf = Buffer.concat([carry, await readBytes(state.path, from, Math.min(end, from + CHUNK))]);
+    const nl = buf.lastIndexOf(0x0a);
+    carry = buf.subarray(nl + 1);
+    for (const raw of buf.subarray(0, nl + 1).toString("utf8").split("\n")) {
+      if (!(raw.includes("<bash-input>") || raw.includes('"name":"Bash"')) || !(BRANCH_WORK.test(raw) || raw.search(BRANCH_MADE) >= 0)) continue;
+      const e = parse(raw);
+      if (!e || e.isMeta) continue;
+      const said = e.type === "user" ? userText(e) : null;
+      if (said?.startsWith("! ")) noteBranchWork(state, said.slice(2), e.gitBranch, e.cwd);
+      if (e.type !== "assistant" || !Array.isArray(e.message?.content)) continue;
+      for (const block of e.message.content) {
+        if (block?.type === "tool_use" && block.name === "Bash" && typeof block.input?.command === "string") noteBranchWork(state, block.input.command, e.gitBranch, e.cwd);
+      }
+    }
+  }
 }
 
 function countChat(buf: Buffer): number {
@@ -274,12 +301,22 @@ function readCommandOutput(state: TranscriptState, content: string): void {
 
 // A command that makes a branch puts what follows on it; any other commit, push or new PR is on the branch it ran on.
 const BRANCH_MADE = /\bgit\s+(?:checkout\s+-[bB]|switch\s+(?:-[cC]|--create|--force-create))\s+([^\s;&|]+)/g;
-const BRANCH_WORK = /\bgit\s+(?:commit|push)\b|\bgh\s+pr\s+create\b/;
+const BRANCH_WORK = /\bgit\s+(?:-C\s+(?:"[^"]+"|'[^']+'|\S+)\s+)?(?:commit|push)\b|\bgh\s+pr\s+create\b/;
+// The transcript names the branch of the session's own folder; a command that goes elsewhere first works there.
+const ELSEWHERE = /(?:^|[;&|]\s*)cd\s+("[^"]+"|'[^']+'|[^\s;&|]+)|\bgit\s+-C\s+("[^"]+"|'[^']+'|[^\s;&|]+)/;
 
 /** Notes the branches a shell command worked on, from Claude or typed after `!`. */
-function noteBranchWork(state: TranscriptState, command: string, branch: unknown): void {
+function noteBranchWork(state: TranscriptState, command: string, branch: unknown, cwd: unknown): void {
   const made = [...command.matchAll(BRANCH_MADE)].map((m) => m[1]);
-  const worked = made.length ? made : typeof branch === "string" && branch && BRANCH_WORK.test(command) ? [branch] : [];
+  if (!made.length && !BRANCH_WORK.test(command)) return;
+  const away = ELSEWHERE.exec(command);
+  if (away) {
+    const dir = (away[1] ?? away[2]).replace(/^(["'])(.*)\1$/, "$2").replace(/^~(?=$|\/)/, HOME);
+    const folder = resolve(typeof cwd === "string" ? cwd : (state.cwd ?? HOME), dir);
+    state.workedFolders = [...state.workedFolders.filter((x) => x !== folder), folder].slice(-5);
+    return;
+  }
+  const worked = made.length ? made : typeof branch === "string" && branch ? [branch] : [];
   for (const b of worked) {
     state.workedBranches = [...state.workedBranches.filter((x) => x !== b), b].slice(-20);
   }
@@ -301,7 +338,7 @@ function applyUser(state: TranscriptState, e: Entry): void {
     if (!Number.isNaN(at)) state.modeAt = at;
   }
   const said = userText(e);
-  if (said?.startsWith("! ")) noteBranchWork(state, said.slice(2), e.gitBranch);
+  if (said?.startsWith("! ")) noteBranchWork(state, said.slice(2), e.gitBranch, e.cwd);
   if (said) {
     state.pending = [];
     state.chat.push({ role: "user", text: said, at: e.timestamp ?? null });
@@ -326,7 +363,7 @@ function applyAssistant(state: TranscriptState, e: Entry): void {
     } else if (block?.type === "tool_use" && typeof block.id === "string") {
       const use: ToolUse = { id: block.id, name: String(block.name ?? "tool"), input: block.input ?? {}, at: e.timestamp ?? null };
       state.pending.push(use);
-      if (use.name === "Bash" && typeof use.input.command === "string") noteBranchWork(state, use.input.command, e.gitBranch);
+      if (use.name === "Bash" && typeof use.input.command === "string") noteBranchWork(state, use.input.command, e.gitBranch, e.cwd);
       const p = describeTool(use.name, use.input);
       state.chat.push({ role: "tool", text: p.detail ? `${p.action}: ${p.detail}` : p.action, at: use.at });
     }
