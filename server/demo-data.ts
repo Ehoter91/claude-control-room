@@ -460,6 +460,7 @@ export function demoSnapshot(now: number, count = DEMO_DEFAULT_COUNT): Snapshot 
       inactiveAfterMinutes: INACTIVE_AFTER / MIN,
       includeIdePanel: false,
       ide: "vscode",
+      terminalFolder: "/Users/you/code",
       layout: "fit",
       shortcutTokens: ["••••8c2f"],
     },

@@ -297,6 +297,7 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 | Watch one session on its own | Click the pop-out button on its tile. |
 | Continue a session on your phone | Click **rc** on its tile. Then open the Claude app and tap **Code**. |
 | Start a session and type to it | Click **New session**, pick a folder, click **Start session**. Type in its console. |
+| Open a Terminal window | Click **Terminal** at the top, or press `T`. It opens in the folder from **Settings → Open Terminal in**, without asking. |
 | See the changes of a session started here | Click **Open in …** in its details, or right-click it. Its folder opens in the IDE from Settings. |
 | Stop using a terminal for a session | Open its details and click **Move here**, once it is idle. |
 | Change a session's model, effort or mode | Click it in the tile's footer and pick another, or right-click the tile. |
@@ -321,6 +322,7 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 | `1` – `9` | Select a tile |
 | `←` `→` | Move between tiles |
 | `N` | Start a new session |
+| `T` | Open a Terminal window |
 | `↵` | Open the selected session: its console, or its IDE |
 | `Space` | Show or hide its details |
 | `A` / `R` | Approve or reject |

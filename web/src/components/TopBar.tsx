@@ -1,9 +1,9 @@
-import { Bell, BellOff, ChevronDown, ChevronUp, Plus, Settings, Volume2, VolumeX, X } from "lucide-react";
+import { Bell, BellOff, ChevronDown, ChevronUp, Plus, Settings, SquareTerminal, Volume2, VolumeX, X } from "lucide-react";
 import { useState } from "react";
 import type { Snapshot } from "../../../shared/types.ts";
 import { playChime } from "../lib/alerts.ts";
 import { native } from "../lib/native.ts";
-import { act, api, remember, setState, useStore, VIEW } from "../store.ts";
+import { act, api, openTerminal, remember, setState, useStore, VIEW } from "../store.ts";
 import { IconButton } from "./Primitives.tsx";
 import { UpdatePill } from "./UpdateSection.tsx";
 
@@ -89,6 +89,11 @@ export function TopBar({ snap }: { snap: Snapshot | null }) {
           {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
         </IconButton>
         {snap && !VIEW.wallOnly && VIEW.sessionPid === null && <UpdatePill snap={snap} />}
+        {cfg && !VIEW.wallOnly && VIEW.sessionPid === null && (
+          <button type="button" className="btn btn-ghost btn-sm" data-tip={`Open Terminal in ${cfg.terminalFolder} (T)`} data-tip-side="bottom" onClick={() => void openTerminal()}>
+            <SquareTerminal size={14} /> Terminal
+          </button>
+        )}
         {cfg && !VIEW.wallOnly && VIEW.sessionPid === null && (
           <button type="button" className="btn btn-primary btn-sm topbar-new" data-tip="Start Claude Code in a folder (N)" data-tip-side="bottom" onClick={() => setState({ panel: "new" })}>
             <Plus size={14} /> New session

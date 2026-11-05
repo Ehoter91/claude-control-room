@@ -159,6 +159,8 @@ export async function startDemo(opts: { port?: number; sessions?: number } = {})
         return send(res, 200, { ok: false, message: "In the app, this pulls the new commits, builds Control Room again and restarts it." });
       case "/api/sessions/new":
         return send(res, 200, { ok: false, message: "In the app, this starts Claude Code in the folder you pick, with a console here." });
+      case "/api/terminal":
+        return send(res, 200, { ok: true, message: `In the app, this opens a Terminal window in ${snap.settings.terminalFolder}.` });
       case "/api/settings": {
         const b = await body<Partial<Settings>>(req);
         const patch: Partial<Settings> = {};
@@ -168,6 +170,7 @@ export async function startDemo(opts: { port?: number; sessions?: number } = {})
         if (typeof b.inactiveAfterMinutes === "number" && b.inactiveAfterMinutes >= 5) patch.inactiveAfterMinutes = b.inactiveAfterMinutes;
         if (b.layout === "fit" || b.layout === "comfortable" || b.layout === "focus") patch.layout = b.layout;
         if (isIdeId(b.ide)) patch.ide = b.ide;
+        if (typeof b.terminalFolder === "string" && b.terminalFolder.trim()) patch.terminalFolder = b.terminalFolder.trim();
         snap = { ...snap, settings: { ...snap.settings, ...patch } };
         publish();
         return send(res, 200, { ok: true, message: "Saved" });

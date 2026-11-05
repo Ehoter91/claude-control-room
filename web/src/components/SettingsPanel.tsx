@@ -2,7 +2,7 @@ import { Copy, X } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { IDES } from "../../../shared/ides.ts";
-import type { Snapshot } from "../../../shared/types.ts";
+import type { ActionResult, Snapshot } from "../../../shared/types.ts";
 import { playChime } from "../lib/alerts.ts";
 import { native } from "../lib/native.ts";
 import { act, api, setState, toast, useStore } from "../store.ts";
@@ -18,6 +18,35 @@ function Line(props: { title: string; text: React.ReactNode; children: React.Rea
       </div>
       <div className="set-control">{props.children}</div>
     </div>
+  );
+}
+
+/** Saved when you leave the field or press Enter. A folder that is not there goes back to the saved one. */
+function FolderField({ value }: { value: string }) {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  const commit = () => {
+    if (text.trim() === value) return;
+    void api<ActionResult>("/api/settings", { terminalFolder: text }).then(
+      (r) => {
+        if (!r.ok) {
+          toast(r.message, "error");
+          setText(value);
+        }
+      },
+      () => setText(value),
+    );
+  };
+  return (
+    <input
+      className="input mono set-folder"
+      aria-label="Terminal folder"
+      spellCheck={false}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+    />
   );
 }
 
@@ -106,6 +135,9 @@ export function SettingsPanel({ snap }: { snap: Snapshot }) {
                 </option>
               ))}
             </select>
+          </Line>
+          <Line title="Open Terminal in" text="Terminal at the top opens a Terminal window in this folder, without asking. ~ is your home folder.">
+            <FolderField value={cfg.terminalFolder} />
           </Line>
           <Line title="Show VS Code panel sessions" text="Sessions in the Claude Code side panel of VS Code, not only terminal ones.">
             <Toggle label="Show VS Code panel sessions" on={cfg.includeIdePanel} onChange={(on) => save({ includeIdePanel: on })} />
@@ -234,6 +266,7 @@ export function SettingsPanel({ snap }: { snap: Snapshot }) {
             <span><kbd className="kbd">P</kbd> open its PR</span>
             <span><kbd className="kbd">X</kbd> close session…</span>
             <span><kbd className="kbd">F</kbd> focus layout</span>
+            <span><kbd className="kbd">T</kbd> open Terminal</span>
             <span><kbd className="kbd">Esc</kbd> close panels</span>
           </div>
         </div>
