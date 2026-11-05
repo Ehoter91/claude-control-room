@@ -211,6 +211,7 @@ It deletes folders only. Your branches stay, on GitHub and on your Mac.
 - Optional: [VS Code](https://code.visualstudio.com), to jump to a session's terminal and to answer from the dashboard.
   **Open in** also works with Cursor, PyCharm, IntelliJ IDEA, WebStorm and Zed. A session opens in the IDE whose terminal runs it.
   Sessions in other terminals open their folder in the IDE you pick in **Settings → Open other sessions in**.
+  A session started here keeps its console, and **Open in …** beside it opens its folder in that IDE, to see the changes.
   PyCharm, IntelliJ IDEA and WebStorm open only git repos, because they add a `.idea/` folder to what they open.
   Put `.idea/` in your global gitignore, or worktree cleanup counts it as unsaved work.
 - Optional: for **rc**, the Claude app on your phone, and Claude Code signed in with a claude.ai plan. See [Remote Control](https://code.claude.com/docs/en/remote-control).
@@ -296,6 +297,7 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 | Watch one session on its own | Click the pop-out button on its tile. |
 | Continue a session on your phone | Click **rc** on its tile. Then open the Claude app and tap **Code**. |
 | Start a session and type to it | Click **New session**, pick a folder, click **Start session**. Type in its console. |
+| See the changes of a session started here | Click **Open in …** in its details, or right-click it. Its folder opens in the IDE from Settings. |
 | Stop using a terminal for a session | Open its details and click **Move here**, once it is idle. |
 | Change a session's model, effort or mode | Click it in the tile's footer and pick another, or right-click the tile. |
 | Do anything to a session without opening it | Right-click its tile, or its row in Focus. |

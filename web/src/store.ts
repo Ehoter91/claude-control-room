@@ -1,6 +1,6 @@
 import { type MouseEvent, useSyncExternalStore } from "react";
 import { hostedName } from "../../shared/hosted.ts";
-import { openTarget, targetName } from "../../shared/ides.ts";
+import { ideName, openTarget, targetName } from "../../shared/ides.ts";
 import type { ActionResult, Session, Snapshot, StatusKind } from "../../shared/types.ts";
 
 export type Filter = "all" | "attention" | "working" | "idle" | "inactive";
@@ -99,6 +99,16 @@ export function useStore<T>(select: (s: State) => T): T {
 /** Where "Open in …" takes this session, by name: "PyCharm", "VS Code" or "Terminal". The server decides the same way. */
 export function useOpenName(s: Session): string {
   return useStore((st) => targetName(openTarget(s, st.snapshot?.settings.ide ?? "vscode")));
+}
+
+/** The IDE from Settings, where a session's folder opens. */
+export function useIdeName(): string {
+  return useStore((st) => ideName(st.snapshot?.settings.ide ?? "vscode"));
+}
+
+/** Opens the session's folder in the IDE from Settings, to see its changes. */
+export function openInIde(s: Session): Promise<ActionResult> {
+  return act(`${s.pid}:ide`, `/api/sessions/${s.pid}/ide`, {}, true);
 }
 
 /** Opens the session where you can type into it: one that runs here in its console, any other in its own terminal. */

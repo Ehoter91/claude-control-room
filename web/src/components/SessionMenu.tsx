@@ -21,7 +21,7 @@ import { createPortal } from "react-dom";
 import { type Choice, EFFORTS, MODELS, MODES, modelAlias } from "../../../shared/claude.ts";
 import type { Session } from "../../../shared/types.ts";
 import { native, popoutSession } from "../lib/native.ts";
-import { act, api, openSession, setState, toast, useOpenName, useStore } from "../store.ts";
+import { act, api, openInIde, openSession, setState, toast, useIdeName, useOpenName, useStore } from "../store.ts";
 import { NameEditor, openUrl } from "./Monitor.tsx";
 import { StatusOrb } from "./Primitives.tsx";
 import { blocked, type What } from "./Tuning.tsx";
@@ -144,6 +144,7 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
   const order = useStore((st) => st.snapshot?.sessions);
   const tmuxReady = useStore((st) => st.snapshot?.setup.tmuxReady ?? false);
   const openIn = useOpenName(s);
+  const ide = useIdeName();
   const a = s.activity;
   const close = () => setState({ menu: null });
   const run = (fn: () => unknown) => () => {
@@ -255,6 +256,7 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
 
       <div className="ctx-group">
         <Item icon={s.hosted ? <SquareTerminal size={14} /> : <CodeXml size={14} />} label={s.hosted ? "Type in its console" : `Open in ${openIn}`} meta="↵" onClick={run(() => openSession(s))} />
+        {s.hosted && <Item icon={<CodeXml size={14} />} label={`Open in ${ide}`} tip="Open its folder, to see the changes" onClick={run(() => openInIde(s))} />}
         <Item
           icon={<PanelRight size={14} />}
           label="Show details"

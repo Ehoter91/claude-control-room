@@ -4,7 +4,7 @@ import { ideName } from "../../../shared/ides.ts";
 import type { ChatLine, Session } from "../../../shared/types.ts";
 import { duration, folderName, money, startedLabel } from "../lib/format.ts";
 import { popoutSession } from "../lib/native.ts";
-import { act, api, consoleName, getState, setState, useOpenName, useStore } from "../store.ts";
+import { act, api, consoleName, getState, openInIde, setState, useIdeName, useOpenName, useStore } from "../store.ts";
 import { ApprovalCard, NameEditor, openUrl, PrChip, QuestionCard, RemoteButton, RenameButton } from "./Monitor.tsx";
 import { StatusOrb, useNow } from "./Primitives.tsx";
 import { TuneChips } from "./Tuning.tsx";
@@ -166,6 +166,7 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
   const [showClaims, setShowClaims] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const openIn = useOpenName(s);
+  const ide = useIdeName();
   const tmuxName = consoleName(s);
   const typeInto = useStore((st) => st.typeInto === s.pid);
   // In the focus layout a console gets the room: the header is one row, with the buttons beside it.
@@ -223,6 +224,11 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
       {!tmuxName && (
         <button type="button" className="btn btn-primary" onClick={() => void act(`${s.pid}:focus`, `/api/sessions/${s.pid}/focus`, {}, true)}>
           <CodeXml size={15} /> Open in {openIn}
+        </button>
+      )}
+      {tmuxName && (
+        <button type="button" className="btn btn-ghost" data-tip="Open its folder, to see the changes" onClick={() => void openInIde(s)}>
+          <CodeXml size={15} /> Open in {ide}
         </button>
       )}
       <RemoteButton s={s} look="button" />

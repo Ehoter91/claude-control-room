@@ -15,6 +15,7 @@ import {
   moveSession,
   newSession,
   openFolder,
+  openFolderInIde,
   openUrl,
   pruneWorktrees,
   removeWorktrees,
@@ -90,6 +91,8 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
         return answerQuestion(monitor, pid, (await body<{ option: number }>(req)).option);
       case "focus":
         return focusSession(monitor, pid);
+      case "ide":
+        return openFolderInIde(monitor, pid);
       case "close":
         return closeSession(monitor, pid, await body<CloseRequest>(req));
       case "remote":
@@ -202,7 +205,7 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
       if (used) noteUsed(used.sessionId);
       return send(res, 200, { ok, message: ok ? "Sent" : "That console is closed." });
     }
-    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|close|remote|rename|move|model|effort|mode|place)$/.exec(p);
+    m = /^\/api\/sessions\/(\d+)\/(approve|reject|answer|focus|ide|close|remote|rename|move|model|effort|mode|place)$/.exec(p);
     if (m) {
       const sessionId = monitor.snapshot?.sessions.find((s) => s.pid === Number(m![1]))?.sessionId;
       const out = await sessionAction(Number(m[1]), m[2], req);
