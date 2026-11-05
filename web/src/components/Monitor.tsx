@@ -20,7 +20,7 @@ import { type MouseEvent, useRef, useState } from "react";
 import type { PullRequest, Session } from "../../../shared/types.ts";
 import { duration } from "../lib/format.ts";
 import { popoutSession } from "../lib/native.ts";
-import { act, api, openSession, setState, useOpenName, useStore } from "../store.ts";
+import { act, api, openMenu, openSession, setState, useOpenName, useStore } from "../store.ts";
 import { IconButton, Ring, StatusOrb, useNow } from "./Primitives.tsx";
 import { TuneChips } from "./Tuning.tsx";
 
@@ -301,6 +301,7 @@ export function Monitor({ s, index, selected }: { s: Session; index: number; sel
   const asking = a.kind === "approval" || a.kind === "question";
   const [renaming, setRenaming] = useState(false);
   const openIn = useOpenName(s);
+  const menuOn = useStore((st) => st.menu?.pid === s.pid);
   return (
     <motion.article
       layout
@@ -308,8 +309,9 @@ export function Monitor({ s, index, selected }: { s: Session; index: number; sel
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.97 }}
       transition={{ type: "spring", stiffness: 420, damping: 38, mass: 0.8 }}
-      className={`monitor st-${a.kind} ${selected ? "is-selected" : ""} ${a.askedYou ? "asked-you" : ""}`}
+      className={`monitor st-${a.kind} ${selected ? "is-selected" : ""} ${a.askedYou ? "asked-you" : ""} ${menuOn ? "has-menu" : ""}`}
       onClick={() => setState({ drawer: s.pid, selected: s.pid })}
+      onContextMenu={(e) => openMenu(e, s.pid)}
       data-pid={s.pid}
       draggable
     >

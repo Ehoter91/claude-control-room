@@ -24,6 +24,7 @@ export interface NativeBridge {
   loginItem(): Promise<boolean>;
   setLoginItem(on: boolean): Promise<boolean>;
   pickFolder(): Promise<string | null>;
+  copyText(text: string): Promise<boolean>;
 }
 
 export const native: NativeBridge | null = (window as unknown as { controlRoom?: NativeBridge }).controlRoom ?? null;

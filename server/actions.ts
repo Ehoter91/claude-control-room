@@ -162,12 +162,32 @@ async function typeCommand(s: Session, command: string): Promise<ActionResult> {
   return sendKeys(s, KEYS.enter, "Enter");
 }
 
-/** Waits for the status line to report what the command changed. It can lag a few seconds behind the command. */
-async function tapShows(sessionId: string, done: (t: Tap) => boolean): Promise<Tap | null> {
+// Claude Code asks first when the conversation is cached: "Switch model?" or "Change effort level?", Yes chosen.
+export const ASKS_TO_SWITCH = /(Switch model|Change effort level)\?[\s\S]*❯ 1\. Yes/;
+
+/** Whether the question on screen is Claude Code asking to confirm the switch just typed. */
+async function asksToSwitch(s: Session): Promise<boolean> {
+  // A VS Code terminal can't be read; it was idle right before the command, so the command is what asks.
+  if (!s.tmux) return true;
+  const out = await paneTmux({ ...s, tmux: s.tmux }, "capture-pane", "-p");
+  return out.ok && ASKS_TO_SWITCH.test(out.stdout);
+}
+
+/**
+ * Waits for the status line to report what the command changed; it can lag a few seconds behind. When Claude Code asks
+ * to confirm first, this says yes, as you would: the switch is what you picked. It happens here, while your defaults
+ * are kept, because Claude Code saves the new one as your default right when you say yes.
+ */
+async function switched(s: Session, done: (t: Tap) => boolean): Promise<Tap | null> {
+  let confirmed = false;
   for (let i = 0; i < 40; i++) {
     await sleep(200);
-    const t = await readTap(sessionId);
+    const t = await readTap(s.sessionId);
     if (t && done(t)) return t;
+    if (!confirmed && (await freshStatus(s.pid))?.status === "waiting" && (await asksToSwitch(s))) {
+      confirmed = true;
+      if (!(await sendKeys(s, KEYS.enter, "Enter")).ok) return null;
+    }
   }
   return null;
 }
@@ -183,7 +203,7 @@ export async function setModel(monitor: Monitor, pid: number, model: unknown): P
   const out = await keepDefaults(async () => {
     const sent = await typeCommand(s, `/model ${model}`);
     if (!sent.ok) return sent;
-    const t = await tapShows(s.sessionId, (x) => modelAlias(x.modelId) === model);
+    const t = await switched(s, (x) => modelAlias(x.modelId) === model);
     await sleep(300); // Claude Code saves the default right around the time it reports the change
     return t ? { ok: true, message: `Now on ${t.model ?? label}` } : { ok: true, message: `Sent /model ${model}. If it did not change, look at the session to see why.` };
   });
@@ -201,7 +221,7 @@ export async function setEffort(monitor: Monitor, pid: number, effort: unknown):
   const out = await keepDefaults(async () => {
     const sent = await typeCommand(s, `/effort ${effort}`);
     if (!sent.ok) return sent;
-    const t = await tapShows(s.sessionId, (x) => x.effort === effort);
+    const t = await switched(s, (x) => x.effort === effort);
     await sleep(300);
     return t ? { ok: true, message: `Effort set to ${effort}` } : { ok: true, message: `Sent /effort ${effort}. If it did not change, look at the session to see why.` };
   });

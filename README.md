@@ -88,6 +88,10 @@ The session you used last comes first: the one you last sent a message, from any
 Claude's own work does not move a tile, so the wall holds still while sessions run.
 Drag a tile anywhere to put it there. It stays there until you use that session again.
 
+Right-click a tile, or a row in Focus, for everything you can do to that session without opening it:
+answer it, open its console, rename it, change its model, effort and mode with one click each,
+send it to your phone, open its PR, put it first or last, copy its resume command, or close it.
+
 ### Answer without leaving
 
 <img src="docs/images/needs-you.png" alt="Two tiles: one needs approval for a command, one asks a question with three answer buttons">
@@ -120,7 +124,7 @@ A tile's footer shows the session's model, effort and permission mode, for examp
 Click one to pick another. The change is for that session only: your defaults for new sessions stay as they were.
 **New session** asks for all three. The mode starts on **auto**.
 
-Control Room types `/model` or `/effort` into the session, as you would. So it changes them for sessions it can type into: the ones started here, the ones in tmux, and VS Code terminals with the helper. The model and effort change between turns.
+Control Room types `/model` or `/effort` into the session, as you would. When Claude Code asks to confirm the switch, Control Room says yes. So it changes them for sessions it can type into: the ones started here, the ones in tmux, and VS Code terminals with the helper. The model and effort change between turns.
 The mode changes with Shift+Tab, so Control Room has to read the screen: it does this for sessions started here and the ones in tmux.
 For a session in another terminal, like PyCharm's, click **Move here** first.
 
@@ -293,7 +297,8 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 | Continue a session on your phone | Click **rc** on its tile. Then open the Claude app and tap **Code**. |
 | Start a session and type to it | Click **New session**, pick a folder, click **Start session**. Type in its console. |
 | Stop using a terminal for a session | Open its details and click **Move here**, once it is idle. |
-| Change a session's model, effort or mode | Click it in the tile's footer and pick another. |
+| Change a session's model, effort or mode | Click it in the tile's footer and pick another, or right-click the tile. |
+| Do anything to a session without opening it | Right-click its tile, or its row in Focus. |
 | Make the details panel wider | Drag its left edge. Double-click the edge to go back. |
 | Make the console taller or shorter | Drag its top or bottom edge, or a corner. |
 | Put a session's tile somewhere else | Drag it there. |

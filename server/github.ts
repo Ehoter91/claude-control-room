@@ -100,6 +100,14 @@ export function prForBranch(slug: string, branch: string | null): PrRow | null {
   return mine.find((r) => r.state === "OPEN") ?? mine.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
 }
 
+/**
+ * The PR of a session's branch, unless it was merged or closed before the session started. Then the checkout was only
+ * left on an older branch, and the PR is that earlier work, not this session's.
+ */
+export function openSince(pr: PrRow | null, startedAt: number): PrRow | null {
+  return pr && (pr.state === "OPEN" || Date.parse(pr.mergedAt ?? pr.updatedAt) >= startedAt) ? pr : null;
+}
+
 /** A PR named by number (from the session's own pr-link), fetched once every two minutes. */
 export function prByNumber(slug: string, num: number): PrRow | null {
   const listed = repos.get(slug)?.rows.find((r) => r.number === num);

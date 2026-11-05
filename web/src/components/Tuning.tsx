@@ -6,10 +6,10 @@ import { type Choice, EFFORTS, MODELS, MODES, modeName, modelAlias } from "../..
 import type { Session } from "../../../shared/types.ts";
 import { act, useStore } from "../store.ts";
 
-type What = "model" | "effort" | "mode";
+export type What = "model" | "effort" | "mode";
 
 /** Why `what` can't change from here right now, or null. The server checks again; this says it before you pick. */
-function blocked(s: Session, what: What): string | null {
+export function blocked(s: Session, what: What): string | null {
   if (what === "mode" ? !s.tmux : !s.tmux && !s.vscodeLinked) {
     return what === "mode" && s.vscodeLinked
       ? "Press Shift+Tab in its terminal, or move it here (Move here, in its details)."

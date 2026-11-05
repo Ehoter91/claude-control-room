@@ -1,5 +1,5 @@
 // Control Room as a Mac app: one server in this process, a menu bar icon with a quick panel, the dashboard, wall windows per display.
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, screen, shell, Tray } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, screen, shell, Tray } from "electron";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -400,6 +400,11 @@ ipcMain.handle("cr:pick-folder", async (e) => {
   const win = BrowserWindow.fromWebContents(e.sender);
   const r = await dialog.showOpenDialog(win, { title: "Start a session in", buttonLabel: "Start here", properties: ["openDirectory"] });
   return r.canceled ? null : (r.filePaths[0] ?? null);
+});
+// The page's own clipboard needs the window focused; this one does not.
+ipcMain.handle("cr:copy", (_e, text) => {
+  clipboard.writeText(String(text));
+  return true;
 });
 ipcMain.handle("cr:set-login-item", (_e, on) => {
   app.setLoginItemSettings({ openAtLogin: Boolean(on) });
