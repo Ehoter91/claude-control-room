@@ -10,7 +10,7 @@ import { publicSettings, settings } from "./config.ts";
 import { gitInfo } from "./git.ts";
 import { ghReady, openSince, prByNumber, prForBranch, refreshRepo } from "./github.ts";
 import { type HostedPane, hostedName, hostedPanes, isTerminalName, screenLines, tmuxReady } from "./hosted.ts";
-import { ideOf, installedIdes } from "./ide.ts";
+import { ideOf, installedIdes, noteConnectedIdes } from "./ide.ts";
 import { CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, HOME, SUMMARIZER_CWD } from "./paths.ts";
 import { powerState } from "./power.ts";
 import { basename, isClaudeComm, processTable, sleep, type ProcRow } from "./proc.ts";
@@ -199,6 +199,7 @@ export class Monitor {
     // Asked every time: a terminal there has no session file to tell of it. When tmux can't answer, the last answer
     // stands, so a console stays open.
     this.hosted = (await hostedPanes()) ?? this.hosted;
+    await noteConnectedIdes(procs);
     if (Date.now() - this.effortReadAt > 60_000) {
       this.effortDefault = await defaultEffort();
       this.effortReadAt = Date.now();
