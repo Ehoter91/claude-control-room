@@ -419,6 +419,7 @@ function sessionOf(s: Seed, now: number): Session {
     tmux: null,
     hosted: false,
     remoteUrl: s.remote ? `https://claude.ai/code/session_demo${s.pid}` : null,
+    terminal: null,
   };
 }
 

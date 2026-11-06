@@ -136,7 +136,7 @@ export function SettingsPanel({ snap }: { snap: Snapshot }) {
               ))}
             </select>
           </Line>
-          <Line title="Open Terminal in" text="Terminal at the top opens a Terminal window in this folder, without asking. ~ is your home folder.">
+          <Line title="Start terminals in" text="Terminal at the top opens a terminal here, on a tile of its own, in this folder. ~ is your home folder.">
             <FolderField value={cfg.terminalFolder} />
           </Line>
           <Line title="Show VS Code panel sessions" text="Sessions in the Claude Code side panel of VS Code, not only terminal ones.">
@@ -266,7 +266,7 @@ export function SettingsPanel({ snap }: { snap: Snapshot }) {
             <span><kbd className="kbd">P</kbd> open its PR</span>
             <span><kbd className="kbd">X</kbd> close session…</span>
             <span><kbd className="kbd">F</kbd> focus layout</span>
-            <span><kbd className="kbd">T</kbd> open Terminal</span>
+            <span><kbd className="kbd">T</kbd> new terminal</span>
             <span><kbd className="kbd">Esc</kbd> close panels</span>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, normalize } from "node:path";
 import { isIdeId } from "../shared/ides.ts";
 import type { Settings } from "../shared/types.ts";
+import { chosenIde } from "./ide.ts";
 import { CONFIG_FILE, HOME } from "./paths.ts";
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -66,7 +67,7 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
   return current;
 }
 
-/** The UI never receives a token, only its last four characters. */
+/** The UI never receives a token, only its last four characters. It gets the IDE "Open in" uses. */
 export function publicSettings(): Settings {
-  return { ...current, shortcutTokens: current.shortcutTokens.map((t) => `••••${t.slice(-4)}`) };
+  return { ...current, ide: chosenIde(current.ide), shortcutTokens: current.shortcutTokens.map((t) => `••••${t.slice(-4)}`) };
 }

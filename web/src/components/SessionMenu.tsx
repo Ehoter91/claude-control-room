@@ -255,7 +255,12 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
       )}
 
       <div className="ctx-group">
-        <Item icon={s.hosted ? <SquareTerminal size={14} /> : <CodeXml size={14} />} label={s.hosted ? "Type in its console" : `Open in ${openIn}`} meta="↵" onClick={run(() => openSession(s))} />
+        <Item
+          icon={s.hosted ? <SquareTerminal size={14} /> : <CodeXml size={14} />}
+          label={s.terminal ? "Type in it" : s.hosted ? "Type in its console" : `Open in ${openIn}`}
+          meta="↵"
+          onClick={run(() => openSession(s))}
+        />
         {s.hosted && <Item icon={<CodeXml size={14} />} label={`Open in ${ide}`} tip="Open its folder, to see the changes" onClick={run(() => openInIde(s))} />}
         <Item
           icon={<PanelRight size={14} />}
@@ -273,18 +278,22 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
         />
       </div>
 
-      <div className="ctx-group">
-        <TuneRows s={s} />
-      </div>
+      {!s.terminal && (
+        <div className="ctx-group">
+          <TuneRows s={s} />
+        </div>
+      )}
 
       <div className="ctx-group">
-        <Item
-          icon={<Smartphone size={14} />}
-          label={remoteOn ? "Open on claude.ai" : "Continue on your phone"}
-          tip={asking && !remoteOn ? "Answer the session first, then send it to your phone" : undefined}
-          disabled={busy[`${s.pid}:remote`] || (asking && !remoteOn)}
-          onClick={run(() => (s.remoteUrl ? openUrl(s.remoteUrl) : act(`${s.pid}:remote`, `/api/sessions/${s.pid}/remote`)))}
-        />
+        {!s.terminal && (
+          <Item
+            icon={<Smartphone size={14} />}
+            label={remoteOn ? "Open on claude.ai" : "Continue on your phone"}
+            tip={asking && !remoteOn ? "Answer the session first, then send it to your phone" : undefined}
+            disabled={busy[`${s.pid}:remote`] || (asking && !remoteOn)}
+            onClick={run(() => (s.remoteUrl ? openUrl(s.remoteUrl) : act(`${s.pid}:remote`, `/api/sessions/${s.pid}/remote`)))}
+          />
+        )}
         {s.pr && <Item icon={<GitPullRequest size={14} />} label={`Open PR #${s.pr.number}`} meta="P" onClick={run(() => openUrl(s.pr!.url))} />}
         {s.story && <Item icon={<SquareKanban size={14} />} label="Open story" meta={`sc-${s.storyId}`} onClick={run(() => openUrl(s.story!.url))} />}
         <Item icon={<FolderOpen size={14} />} label="Show folder in Finder" onClick={run(() => api("/api/open", { folder: s.git?.root ?? s.cwd }))} />
@@ -303,17 +312,21 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
       <div className="ctx-group">
         <Item icon={<ArrowUpToLine size={14} />} label="Move to the front" disabled={!first || first.pid === s.pid} onClick={run(() => place({ below: first!.pid }))} />
         <Item icon={<ArrowDownToLine size={14} />} label="Move to the end" disabled={!last || last.pid === s.pid} onClick={run(() => place({ above: last!.pid }))} />
-        <Item
-          icon={<Copy size={14} />}
-          label="Copy resume command"
-          tip="To continue this conversation in any terminal"
-          onClick={run(() => copy(`cd ${shellQuote(s.cwd)} && claude --resume ${s.sessionId}`, "the resume command"))}
-        />
-        <Item icon={<Copy size={14} />} label="Copy session ID" onClick={run(() => copy(s.sessionId, "the session ID"))} />
+        {!s.terminal && (
+          <>
+            <Item
+              icon={<Copy size={14} />}
+              label="Copy resume command"
+              tip="To continue this conversation in any terminal"
+              onClick={run(() => copy(`cd ${shellQuote(s.cwd)} && claude --resume ${s.sessionId}`, "the resume command"))}
+            />
+            <Item icon={<Copy size={14} />} label="Copy session ID" onClick={run(() => copy(s.sessionId, "the session ID"))} />
+          </>
+        )}
       </div>
 
       <div className="ctx-group">
-        <Item icon={<X size={14} />} label="Close session…" meta="X" danger onClick={run(() => setState({ closing: s.pid }))} />
+        <Item icon={<X size={14} />} label={s.terminal ? "Close terminal…" : "Close session…"} meta="X" danger onClick={run(() => setState({ closing: s.pid }))} />
       </div>
     </div>,
     document.body,

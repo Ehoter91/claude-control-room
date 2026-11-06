@@ -16,7 +16,6 @@ import {
   newSession,
   openFolder,
   openFolderInIde,
-  openTerminal,
   openUrl,
   pruneWorktrees,
   removeWorktrees,
@@ -26,6 +25,7 @@ import {
   setMode,
   setModel,
   startRemoteControl,
+  startTerminal,
 } from "./actions.ts";
 import { repoClaims } from "./claims.ts";
 import { checkForUpdate, onUpdateBuilt, startUpdate } from "./update.ts";
@@ -69,6 +69,8 @@ async function cleanOldTaps(): Promise<void> {
 
 // Actions that count as using a session, so it moves to the front of the list. Closing and renaming do not.
 const USED_BY = new Set(["approve", "reject", "answer", "focus", "remote", "move", "model", "effort", "mode"]);
+// What a terminal can do; the rest would type Claude Code's keys and commands into a shell.
+const FOR_TERMINALS = new Set(["focus", "ide", "close", "rename", "place"]);
 
 export async function startServer(opts: { port?: number; dev?: boolean; installUpdate?: (builtApp: string) => void } = {}): Promise<Running> {
   await mkdir(APP_DIR, { recursive: true });
@@ -83,6 +85,8 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
   let port = opts.port ?? Number(process.env.CONTROL_ROOM_PORT ?? 4317);
 
   const sessionAction = async (pid: number, action: string, req: IncomingMessage): Promise<ActionResult | object | null> => {
+    const terminal = monitor.snapshot?.sessions.find((s) => s.pid === pid)?.terminal;
+    if (terminal && !FOR_TERMINALS.has(action)) return { ok: false, message: "That is a terminal, not Claude Code." };
     switch (action) {
       case "approve":
         return answerPermission(monitor, pid, true);
@@ -155,7 +159,7 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
       if (m[2] === "chat") return send(res, 200, { chat: monitor.transcriptOf(pid)?.chat ?? [] });
       return send(res, 200, await closePlan(monitor, pid));
     }
-    m = /^\/api\/console\/(cr-[0-9a-f]{8})\/stream$/.exec(p);
+    m = /^\/api\/console\/(crt?-[0-9a-f]{8})\/stream$/.exec(p);
     if (req.method === "GET" && m) {
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive" });
       const event = (name: string, data: string) => res.write(`event: ${name}\ndata: ${data}\n\n`);
@@ -191,7 +195,7 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
     }
     if (req.method !== "POST") return send(res, 404, { ok: false, message: "Not found" });
 
-    m = /^\/api\/console\/(cr-[0-9a-f]{8})\/(input|resize|stop)$/.exec(p);
+    m = /^\/api\/console\/(crt?-[0-9a-f]{8})\/(input|resize|stop)$/.exec(p);
     if (m && m[2] === "stop") {
       const ok = await stopConsole(m[1]);
       await monitor.fresh();
@@ -222,7 +226,7 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
       case "/api/sessions/new":
         return send(res, 200, await newSession(monitor, await body<Parameters<typeof newSession>[1]>(req)));
       case "/api/terminal":
-        return send(res, 200, openTerminal());
+        return send(res, 200, await startTerminal(monitor));
       case "/api/open": {
         const b = await body<{ url?: string; folder?: string }>(req);
         if (b.url) return send(res, 200, openUrl(b.url));

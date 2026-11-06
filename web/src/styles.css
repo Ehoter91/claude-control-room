@@ -19,6 +19,7 @@
   --bad: #ff6b6b;
   --warn: #ffb547;
   --merged: #c4a5ff;
+  --terminal: #a3e635; /* a terminal started here, not Claude Code */
   --radius: 16px;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
   --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif;
@@ -3684,4 +3685,67 @@ body.is-resizing .drawer {
 
 .set-folder {
   width: 220px;
+}
+
+/* ---------- terminals: a shell started here, in terminal green, its screen on its tile ---------- */
+.monitor.is-terminal,
+.detail.is-terminal,
+.focus-row.is-terminal {
+  --accent: var(--terminal);
+  --accent-text: #d9f99d;
+}
+.monitor.is-terminal {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "head" "screen" "foot";
+}
+.monitor.is-terminal.is-running::before {
+  background: linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%) 0 0 / 50% 100% no-repeat;
+  animation: sweep 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  opacity: 1;
+}
+.term-mark {
+  flex: none;
+  color: var(--terminal);
+}
+.is-terminal .orb-idle {
+  --c: var(--terminal);
+  box-shadow: 0 0 10px rgba(163, 230, 53, 0.45);
+}
+.is-terminal .orb-working {
+  border-color: rgba(163, 230, 53, 0.22);
+  border-top-color: var(--terminal);
+  border-right-color: var(--terminal);
+}
+.term-screen {
+  grid-area: screen;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 0;
+  overflow: hidden;
+  margin: 10px 0 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--terminal) 16%, transparent);
+  background: #0a0d13;
+  color: #d5dae3;
+  font: 11px/1.35 var(--mono);
+  white-space: pre;
+  /* Older lines fade out at the top, as they scroll off. */
+  mask-image: linear-gradient(to bottom, transparent, #000 28px);
+}
+.term-screen > div {
+  overflow: hidden;
+}
+.term-branch {
+  margin-left: auto;
+  flex: none;
+  max-width: 45%;
+}
+.btn-terminal svg {
+  color: var(--terminal);
+}
+.dialog-text {
+  margin-top: 12px;
+  color: var(--text-2);
 }

@@ -96,6 +96,12 @@ export interface Summary {
   updatedAt: number | null;
 }
 
+/** A terminal started in Control Room: a shell on a tile of its own, with no Claude Code in it. */
+export interface TerminalInfo {
+  command: string | null; // the program it runs now; null at the shell's prompt
+  screen: string[]; // the last lines on its screen, for its tile
+}
+
 export interface Session {
   pid: number;
   shellPid: number; // the terminal shell that runs claude
@@ -131,6 +137,7 @@ export interface Session {
   tmux: string | null;
   hosted: boolean; // runs in Control Room's own tmux, so its console works here
   remoteUrl: string | null; // claude.ai link while Remote Control is on
+  terminal: TerminalInfo | null; // set for a terminal: then pid is its shell's, and sessionId its tmux name
 }
 
 export interface RateWindow {
@@ -174,7 +181,7 @@ export interface Settings {
   inactiveAfterMinutes: number;
   includeIdePanel: boolean;
   ide: IdeId; // where "Open in …" opens a session
-  terminalFolder: string; // where "Terminal" opens a Terminal window
+  terminalFolder: string; // where a new terminal starts
   layout: "fit" | "comfortable" | "focus";
   shortcutTokens: string[]; // masked when sent to the UI
 }

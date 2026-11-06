@@ -259,7 +259,8 @@ export function MenuBarPanel() {
       </div>
     );
 
-  const sessions = snap.sessions;
+  // The menu bar lists Claude Code sessions; terminals stay in the app.
+  const sessions = snap.sessions.filter((s) => !s.terminal);
   const asks = sessions.filter(needsYou).sort((a, b) => a.activity.since - b.activity.since);
   const rest = sessions.filter((s) => !needsYou(s));
   const active = rest.filter((s) => s.activity.kind !== "inactive");

@@ -9,9 +9,9 @@ import { claimsOf, repoClaims } from "./claims.ts";
 import { publicSettings, settings } from "./config.ts";
 import { gitInfo } from "./git.ts";
 import { ghReady, openSince, prByNumber, prForBranch, refreshRepo } from "./github.ts";
-import { hostedName, hostedSessions, tmuxReady } from "./hosted.ts";
+import { type HostedPane, hostedName, hostedPanes, isTerminalName, screenLines, tmuxReady } from "./hosted.ts";
 import { ideOf, installedIdes } from "./ide.ts";
-import { CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, SUMMARIZER_CWD } from "./paths.ts";
+import { CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, HOME, SUMMARIZER_CWD } from "./paths.ts";
 import { powerState } from "./power.ts";
 import { basename, isClaudeComm, processTable, sleep, type ProcRow } from "./proc.ts";
 import { bridgeIdOf, remoteUrl } from "./remote.ts";
@@ -143,6 +143,10 @@ function fallbackSummary(input: { story: string | null; note: string | null; tit
 }
 
 const PREVIEW_LINES = 8;
+const SCREEN_LINES = 14; // of a terminal, for its tile
+
+// A terminal at its prompt runs only the shell; anything else in front is a command you started.
+const SHELLS = /^-?(zsh|bash|sh|fish|nu|login)$/;
 
 export class Monitor {
   snapshot: Snapshot | null = null;
@@ -155,7 +159,8 @@ export class Monitor {
   private ticking = false;
   procs = new Map<number, ProcRow>();
   files = new Map<number, SessionFile>();
-  private hosted = new Set<string>(); // tmux sessions on Control Room's own server
+  private hosted: HostedPane[] = []; // tmux sessions on Control Room's own server
+  private commands = new Map<string, { command: string | null; since: number }>(); // what each terminal runs, since when
 
   subscribe(fn: (s: Snapshot) => void): () => void {
     this.listeners.add(fn);
@@ -191,9 +196,9 @@ export class Monitor {
     const cfg = settings();
     const [files, procs] = await Promise.all([readSessionFiles(), processTable()]);
     this.procs = procs;
-    // Asked only while some session runs there; when tmux can't answer, the last answer stands, so a console stays open.
-    if (files.some((f) => hostedName(f.tmux))) this.hosted = (await hostedSessions()) ?? this.hosted;
-    else this.hosted = new Set();
+    // Asked every time: a terminal there has no session file to tell of it. When tmux can't answer, the last answer
+    // stands, so a console stays open.
+    this.hosted = (await hostedPanes()) ?? this.hosted;
     if (Date.now() - this.effortReadAt > 60_000) {
       this.effortDefault = await defaultEffort();
       this.effortReadAt = Date.now();
@@ -207,7 +212,12 @@ export class Monitor {
     this.files = new Map(live.map((f) => [f.pid, f]));
     for (const pid of [...this.transcripts.keys()]) if (!this.files.has(pid)) this.transcripts.delete(pid);
 
-    const sessions = await Promise.all(live.map((f) => this.buildSession(f, procs).catch(() => null)));
+    const terminals = this.hosted.filter((p) => isTerminalName(p.name));
+    for (const name of [...this.commands.keys()]) if (!terminals.some((p) => p.name === name)) this.commands.delete(name);
+    const sessions = await Promise.all([
+      ...live.map((f) => this.buildSession(f, procs).catch(() => null)),
+      ...terminals.map((p) => this.buildTerminal(p).catch(() => null)),
+    ]);
     // The one you used last comes first, or where you dropped it. Claude's own work does not count, so the order holds
     // still while sessions run.
     const list = sessions.filter((s): s is Session => s !== null).sort((a, b) => b.sortKey - a.sortKey || b.startedAt - a.startedAt);
@@ -382,8 +392,65 @@ export class Monitor {
       vscodeLinked: windowFor(shellPid) !== null,
       transcriptPath: path,
       tmux: f.tmux,
-      hosted: this.hosted.has(hostedName(f.tmux) ?? ""),
+      hosted: this.hosted.some((p) => p.name === hostedName(f.tmux)),
       remoteUrl: remoteUrl(f.bridgeSessionId),
+      terminal: null,
+    };
+  }
+
+  /** A terminal started here: a tile like a session's, with its screen in place of a conversation. */
+  private async buildTerminal(p: HostedPane): Promise<Session> {
+    const command = SHELLS.test(p.command) ? null : p.command || null;
+    const prev = this.commands.get(p.name);
+    const since = prev && prev.command === command ? prev.since : prev ? Date.now() : p.createdAt;
+    this.commands.set(p.name, { command, since });
+    const [git, saved, screen] = await Promise.all([gitInfo(p.cwd, 15_000), savedName(p.name), screenLines(p.name, SCREEN_LINES)]);
+    const folder = p.cwd === HOME ? "~" : p.cwd.startsWith(`${HOME}/`) ? `~${p.cwd.slice(HOME.length)}` : p.cwd;
+    const lastUsedAt = Math.max(p.createdAt, usedAt(p.name));
+    return {
+      pid: p.pid,
+      shellPid: p.pid,
+      sessionId: p.name,
+      name: saved ?? (p.cwd === HOME ? "Terminal" : basename(p.cwd)),
+      nameSource: saved ? "saved" : "folder",
+      shortName: p.name,
+      cwd: p.cwd,
+      startedAt: p.createdAt,
+      lastActivityAt: since,
+      lastUsedAt,
+      sortKey: sortKey(p.name, lastUsedAt),
+      activity: {
+        kind: command ? "working" : "idle",
+        since,
+        label: command ? `Running ${command}` : "Ready",
+        detail: null,
+        tool: null,
+        question: null,
+        askedYou: false,
+      },
+      summary: { headline: folder, now: null, source: "none", updatedAt: null },
+      firstPrompt: null,
+      chat: [],
+      git,
+      pr: null,
+      story: null,
+      storyId: null,
+      claims: [],
+      model: null,
+      modelId: null,
+      effort: null,
+      effortIsDefault: true,
+      mode: null,
+      contextPercent: null,
+      costUsd: null,
+      repoName: git ? basename(git.mainRoot) : basename(p.cwd),
+      ide: null,
+      vscodeLinked: false,
+      transcriptPath: null,
+      tmux: p.name,
+      hosted: true,
+      remoteUrl: null,
+      terminal: { command, screen },
     };
   }
 }
