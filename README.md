@@ -211,7 +211,7 @@ It deletes folders only. Your branches stay, on GitHub and on your Mac.
 - Optional: [VS Code](https://code.visualstudio.com), to jump to a session's terminal and to answer from the dashboard.
   **Open in** also works with Cursor, PyCharm, IntelliJ IDEA, WebStorm and Zed. A session opens in the IDE whose terminal runs it.
   Sessions in other terminals open their folder in the IDE you pick in **Settings → Open other sessions in**.
-  Until you pick one, it is VS Code, or the first IDE in Applications when VS Code is not there.
+  Until you pick one, it is VS Code. When VS Code is not there, it is the IDE Claude Code is connected to, else the first IDE in Applications.
   A session started here keeps its console, and **Open in …** beside it opens its folder in that IDE, to see the changes.
   PyCharm, IntelliJ IDEA and WebStorm open only git repos, because they add a `.idea/` folder to what they open.
   Put `.idea/` in your global gitignore, or worktree cleanup counts it as unsaved work.

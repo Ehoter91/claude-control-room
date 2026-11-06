@@ -429,6 +429,7 @@ describe("Open in", () => {
     expect(chosenIde("pycharm", ["cursor", "pycharm"])).toBe("pycharm");
     expect(chosenIde("vscode", [])).toBe("vscode"); // none found: the setting stands, and says so when used
     expect(chosenIde("zed", ["cursor", "pycharm"])).toBe("cursor");
+    expect(chosenIde("zed", ["cursor", "pycharm"], ["pycharm"])).toBe("pycharm"); // the one Claude Code is connected to
   });
 
   it("takes only a real folder for terminals, with ~ for home", () => {

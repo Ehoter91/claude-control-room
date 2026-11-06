@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { IDES, ideById, ideName, type IdeId } from "../shared/ides.ts";
 import type { ActionResult } from "../shared/types.ts";
-import { HOME } from "./paths.ts";
+import { CLAUDE_DIR, HOME } from "./paths.ts";
 import { launch, run } from "./proc.ts";
 
 let found: { at: number; ids: IdeId[] } | null = null;
@@ -34,12 +35,28 @@ function foundElsewhere(id: IdeId): boolean {
   return hit?.found ?? false;
 }
 
+// The IDEs Claude Code is connected to now. Its IDE extension writes a lock file with the IDE's pid, and leaves it
+// behind when the IDE quits, so only a pid that still runs an IDE counts.
+let connected: IdeId[] = [];
+
+export async function noteConnectedIdes(procs: Map<number, { comm: string }>): Promise<void> {
+  const dir = join(CLAUDE_DIR, "ide");
+  const files = (await readdir(dir).catch(() => [] as string[])).filter((f) => f.endsWith(".lock"));
+  const ids = new Set<IdeId>();
+  for (const f of files) {
+    const pid = await readFile(join(dir, f), "utf8").then((t) => Number(JSON.parse(t).pid), () => 0);
+    const ide = ideOf(procs.get(pid)?.comm ?? "");
+    if (ide) ids.add(ide);
+  }
+  connected = [...ids];
+}
+
 /**
- * The IDE from Settings, when this Mac has it. Otherwise the first one it has, so "Open in" never names a missing
- * app: the setting starts at VS Code, picked or not.
+ * The IDE from Settings, when this Mac has it. Otherwise the one Claude Code is connected to, else the first one this
+ * Mac has, so "Open in" never names a missing app: the setting starts at VS Code, picked or not.
  */
-export function chosenIde(saved: IdeId, here = installedIdes()): IdeId {
-  return !here.length || here.includes(saved) || foundElsewhere(saved) ? saved : here[0];
+export function chosenIde(saved: IdeId, here = installedIdes(), open = connected): IdeId {
+  return !here.length || here.includes(saved) || foundElsewhere(saved) ? saved : (open[0] ?? here[0]);
 }
 
 export function ideOf(comm: string): IdeId | null {
