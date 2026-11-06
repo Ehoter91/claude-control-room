@@ -6,8 +6,9 @@ import { endClaim, forgetClaims, repoClaims } from "./claims.ts";
 import { folderSetting, settings } from "./config.ts";
 import { git, listWorktrees } from "./git.ts";
 import { prForBranch, type PrRow } from "./github.ts";
-import { hostedName, hostedSessions, startSession, tmux, tmuxReady } from "./hosted.ts";
-import { openInIde } from "./ide.ts";
+import { stopConsole } from "./console.ts";
+import { hostedName, hostedSessions, startSession, startShell, tmux, tmuxReady } from "./hosted.ts";
+import { chosenIde, openInIde } from "./ide.ts";
 import type { Monitor } from "./monitor.ts";
 import { findTranscript, noteMode, readSessionFiles, type SessionFile } from "./monitor.ts";
 import { cleanName, saveName } from "./names.ts";
@@ -287,7 +288,7 @@ export async function placeSession(monitor: Monitor, pid: number, b: { above?: u
 export async function focusSession(monitor: Monitor, pid: number): Promise<ActionResult> {
   const s = find(monitor, pid);
   if (!s) return { ok: false, message: "That session is gone." };
-  const target = openTarget(s, settings().ide);
+  const target = openTarget(s, chosenIde(settings().ide));
   // The page opens the console itself; this answers a menu or a keyboard shortcut that asked the server.
   if (target.kind === "console") return { ok: true, message: "Its console is in Control Room." };
   if (target.kind === "tmux") {
@@ -306,7 +307,7 @@ export async function focusSession(monitor: Monitor, pid: number): Promise<Actio
 export async function openFolderInIde(monitor: Monitor, pid: number): Promise<ActionResult> {
   const s = find(monitor, pid);
   if (!s) return { ok: false, message: "That session is gone." };
-  return openInIde(settings().ide, s.git?.root ?? s.cwd, !!s.git);
+  return openInIde(chosenIde(settings().ide), s.git?.root ?? s.cwd, !!s.git);
 }
 
 /**
@@ -437,12 +438,15 @@ export function openFolder(path: string): ActionResult {
   return { ok: true, message: "Opened in Finder" };
 }
 
-/** A new Terminal window in the folder from Settings. `open` starts Terminal if it is not running, and asks nothing. */
-export function openTerminal(): ActionResult {
+/** A new terminal in Control Room, in the folder from Settings. It shows as a tile once it runs, which is at once. */
+export async function startTerminal(monitor: Monitor): Promise<ActionResult & { pid?: number }> {
   const folder = folderSetting(settings().terminalFolder);
   if (!folder) return { ok: false, message: `That folder is gone: ${settings().terminalFolder}. Pick another in Settings.` };
-  launch("open", ["-a", "Terminal", folder]);
-  return { ok: true, message: "Opened Terminal" };
+  const r = await startShell(folder);
+  if (!r.ok || !r.name) return r;
+  await monitor.fresh();
+  const s = monitor.snapshot?.sessions.find((x) => x.sessionId === r.name);
+  return s ? { ok: true, message: "Opened a terminal", pid: s.pid } : { ok: false, message: "The terminal closed right after it started." };
 }
 
 export async function worktreeReportFor(monitor: Monitor, s: Session): Promise<WorktreeReport | null> {
@@ -504,6 +508,12 @@ export async function closeSession(monitor: Monitor, pid: number, req: CloseRequ
   const s = find(monitor, pid);
   if (!s) return { ok: false, message: "That session is gone." };
   if (!req.close) return { ok: false, message: "Nothing to do." };
+  // A terminal ends with its tmux session, and whatever runs in it with it.
+  if (s.terminal) {
+    if (!(await stopConsole(s.sessionId))) return { ok: false, message: "The terminal did not close." };
+    await monitor.tick();
+    return { ok: true, message: "Terminal closed" };
+  }
   const log: string[] = [];
   const report = req.deleteWorktree ? await worktreeReportFor(monitor, s) : null;
   if (req.deleteWorktree) {

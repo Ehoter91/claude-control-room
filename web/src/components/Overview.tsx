@@ -255,7 +255,8 @@ function MacCard({ snap }: { snap: Snapshot }) {
 
 export function Overview({ snap }: { snap: Snapshot }) {
   const collapsed = useStore((s) => s.overviewCollapsed);
-  const sessions = snap.sessions;
+  // Counts of Claude Code sessions: a terminal is not one.
+  const sessions = snap.sessions.filter((s) => !s.terminal);
   if (collapsed) {
     const n = sessions.filter(needsYou).length;
     const working = sessions.filter((s) => s.activity.kind === "working").length;

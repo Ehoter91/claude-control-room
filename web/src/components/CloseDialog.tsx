@@ -36,6 +36,49 @@ function Checkbox(props: { checked: boolean; disabled?: boolean; onChange: (v: b
 }
 
 export function CloseDialog({ s }: { s: Session }) {
+  return s.terminal ? <CloseTerminal s={s} /> : <CloseSession s={s} />;
+}
+
+/** A terminal holds no claims or worktree of its own: closing it only ends its shell, and what runs in it. */
+function CloseTerminal({ s }: { s: Session }) {
+  const busy = useStore((st) => st.busy[`${s.pid}:close`] === true);
+  const dismiss = () => setState({ closing: null });
+  const submit = async () => {
+    const out = await act(`${s.pid}:close`, `/api/sessions/${s.pid}/close`, { close: true, deleteWorktree: false, force: false });
+    if (out.ok) setState({ closing: null, drawer: null });
+  };
+  const command = s.terminal?.command;
+  return (
+    <div className="scrim" onClick={dismiss}>
+      <motion.div
+        className="dialog"
+        role="dialog"
+        aria-modal
+        aria-labelledby="close-title"
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: "spring", stiffness: 500, damping: 36 }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.key === "Escape" && dismiss()}
+      >
+        <h2 id="close-title">Close this terminal?</h2>
+        <p className="dialog-sub">{s.summary.headline}</p>
+        <p className="dialog-text">{command ? `${command} still runs in it, and stops when it closes.` : "Its shell ends. Nothing else changes."}</p>
+        <div className="dialog-buttons">
+          <button type="button" className="btn btn-ghost" onClick={dismiss}>
+            Cancel
+          </button>
+          <button type="button" className={`btn ${command ? "btn-danger" : "btn-primary"}`} disabled={busy} autoFocus onClick={() => void submit()}>
+            {busy ? <Spinner /> : null}
+            Close terminal
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function CloseSession({ s }: { s: Session }) {
   const [plan, setPlan] = useState<ClosePlan | null>(null);
   const [close, setClose] = useState(true);
   const [del, setDel] = useState(false);

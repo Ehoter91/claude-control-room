@@ -21,6 +21,27 @@ export function installedIdes(): IdeId[] {
   return found.ids;
 }
 
+// Spotlight's answer, now and then, for an IDE kept somewhere else: macOS opens it there by its bundle id.
+const elsewhere = new Map<IdeId, { at: number; found: boolean }>();
+
+function foundElsewhere(id: IdeId): boolean {
+  const hit = elsewhere.get(id);
+  if (!hit || Date.now() - hit.at > 600_000) {
+    elsewhere.set(id, { at: Date.now(), found: hit?.found ?? false });
+    const query = (ideById(id)?.bundleIds ?? []).map((b) => `kMDItemCFBundleIdentifier == '${b}'`).join(" || ");
+    void run("mdfind", [query], { timeoutMs: 10_000 }).then((r) => elsewhere.set(id, { at: Date.now(), found: r.ok && r.stdout.trim() !== "" }));
+  }
+  return hit?.found ?? false;
+}
+
+/**
+ * The IDE from Settings, when this Mac has it. Otherwise the first one it has, so "Open in" never names a missing
+ * app: the setting starts at VS Code, picked or not.
+ */
+export function chosenIde(saved: IdeId, here = installedIdes()): IdeId {
+  return !here.length || here.includes(saved) || foundElsewhere(saved) ? saved : here[0];
+}
+
 export function ideOf(comm: string): IdeId | null {
   return IDES.find((i) => i.process.test(comm))?.id ?? null;
 }

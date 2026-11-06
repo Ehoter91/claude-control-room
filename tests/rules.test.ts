@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { deriveActivity, endsWithQuestion, type StatusFile } from "../server/activity.ts";
 import { cleanSettings, folderSetting } from "../server/config.ts";
 import { parseRemote, parseShortstat } from "../server/git.ts";
-import { ideOf, openInIde } from "../server/ide.ts";
+import { chosenIde, ideOf, openInIde } from "../server/ide.ts";
 import { cleanName, MAX_NAME, pickName, tabName, type NameParts } from "../server/names.ts";
 import { etimeSeconds, loginAgeFrom } from "../server/proc.ts";
 import { bridgeIdOf, CLEAR_DRAFT, REMOTE_COMMAND, remoteRefusal, remoteUrl } from "../server/remote.ts";
@@ -425,7 +425,13 @@ describe("Open in", () => {
     expect(cleanSettings({ ide: "zed" }).ide).toBe("zed");
   });
 
-  it("takes only a real folder for Terminal, with ~ for home", () => {
+  it("opens in an IDE this Mac has, when the one in Settings is missing", () => {
+    expect(chosenIde("pycharm", ["cursor", "pycharm"])).toBe("pycharm");
+    expect(chosenIde("vscode", [])).toBe("vscode"); // none found: the setting stands, and says so when used
+    expect(chosenIde("zed", ["cursor", "pycharm"])).toBe("cursor");
+  });
+
+  it("takes only a real folder for terminals, with ~ for home", () => {
     expect(folderSetting("~")).toBe(homedir());
     expect(folderSetting(` ${tmpdir()}/ `)).toBe(tmpdir());
     for (const v of ["", "relative/path", "/no/such/folder", `${tmpdir()}/../${tmpdir().split("/").pop()}/nope`, 3, null]) expect(folderSetting(v)).toBeNull();

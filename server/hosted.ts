@@ -37,7 +37,7 @@ export function tmuxArgs(...args: string[]): string[] {
   return ["-L", SOCKET, ...args];
 }
 
-export { hostedName, isHostedName } from "../shared/hosted.ts";
+export { hostedName, isHostedName, isTerminalName } from "../shared/hosted.ts";
 
 // The variables of whoever started Control Room (Electron, npm, or a Claude Code session) must not reach a new
 // session: a Claude Code that sees CLAUDECODE thinks it runs inside another one.
@@ -56,13 +56,43 @@ export function tmux(args: string[], timeoutMs = 5_000) {
   return run("tmux", tmuxArgs(...args), { timeoutMs, env: sessionEnv() });
 }
 
+export interface HostedPane {
+  name: string; // its tmux session
+  createdAt: number; // epoch ms
+  pid: number; // what the pane runs: Claude Code's shell, or a terminal's shell
+  cwd: string; // the folder that program is in now
+  command: string; // the program in front, such as "zsh" or "npm"
+}
+
+/** The sessions that run on Control Room's tmux server now, one pane each; null when tmux could not say. */
+export async function hostedPanes(): Promise<HostedPane[] | null> {
+  if (!tmuxReady()) return [];
+  const format = "#{session_name}\t#{session_created}\t#{pane_pid}\t#{pane_current_path}\t#{pane_current_command}";
+  const out = await tmux(["list-panes", "-a", "-F", format], 2_000);
+  // No server means nothing runs here; any other failure says nothing either way.
+  if (!out.ok) return /no server running|error connecting/i.test(out.stderr) ? [] : null;
+  const panes = new Map<string, HostedPane>();
+  for (const line of out.stdout.split("\n")) {
+    const [name, created, pid, cwd, command] = line.split("\t");
+    if (!isHostedName(name) || panes.has(name)) continue;
+    panes.set(name, { name, createdAt: Number(created) * 1000, pid: Number(pid), cwd: cwd ?? "", command: command ?? "" });
+  }
+  return [...panes.values()];
+}
+
 /** Names of the sessions that run on Control Room's tmux server now; null when tmux could not say. */
 export async function hostedSessions(): Promise<Set<string> | null> {
-  if (!tmuxReady()) return new Set();
-  const out = await tmux(["list-sessions", "-F", "#{session_name}"], 2_000);
-  if (out.ok) return new Set(out.stdout.split("\n").map((l) => l.trim()).filter(isHostedName));
-  // No server means nothing runs here; any other failure says nothing either way.
-  return /no server running|error connecting/i.test(out.stderr) ? new Set() : null;
+  const panes = await hostedPanes();
+  return panes && new Set(panes.map((p) => p.name));
+}
+
+/** The last lines on a hosted session's screen, as plain text, without the empty rows under the prompt. */
+export async function screenLines(name: string, keep: number): Promise<string[]> {
+  const out = await tmux(["capture-pane", "-p", "-t", `=${name}:`], 2_000);
+  if (!out.ok) return [];
+  const lines = out.stdout.split("\n").map((l) => l.trimEnd());
+  while (lines.length && !lines[lines.length - 1]) lines.pop();
+  return lines.slice(-keep).map((l) => l.slice(0, 300));
 }
 
 export interface StartOptions {
@@ -97,6 +127,16 @@ export function newSessionArgs(name: string, o: StartOptions, shell = process.en
 async function writeConf(): Promise<void> {
   const current = await readFile(CONF, "utf8").catch(() => null);
   if (current !== CONF_TEXT) await writeFile(CONF, CONF_TEXT);
+}
+
+/** Starts a terminal: your shell in a new tmux session, the way a Terminal window starts it. */
+export async function startShell(cwd: string, shell = process.env.SHELL || "/bin/zsh"): Promise<ActionResult & { name?: string }> {
+  if (!tmuxReady()) return { ok: false, message: "Control Room needs tmux for this. Install it: brew install tmux" };
+  await writeConf();
+  const name = `crt-${randomBytes(4).toString("hex")}`;
+  const started = await tmux(["-f", CONF, "-u", "new-session", "-d", "-s", name, "-c", cwd, "-x", "120", "-y", "36", shell, "-l"], 10_000);
+  if (!started.ok) return { ok: false, message: (started.stderr || started.stdout).trim() || "tmux did not start the terminal." };
+  return { ok: true, message: "Started", name };
 }
 
 /** Starts Claude Code in a new tmux session. Claude Code writes its session file a moment later, or once the folder is trusted. */

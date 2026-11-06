@@ -211,6 +211,7 @@ It deletes folders only. Your branches stay, on GitHub and on your Mac.
 - Optional: [VS Code](https://code.visualstudio.com), to jump to a session's terminal and to answer from the dashboard.
   **Open in** also works with Cursor, PyCharm, IntelliJ IDEA, WebStorm and Zed. A session opens in the IDE whose terminal runs it.
   Sessions in other terminals open their folder in the IDE you pick in **Settings → Open other sessions in**.
+  Until you pick one, it is VS Code, or the first IDE in Applications when VS Code is not there.
   A session started here keeps its console, and **Open in …** beside it opens its folder in that IDE, to see the changes.
   PyCharm, IntelliJ IDEA and WebStorm open only git repos, because they add a `.idea/` folder to what they open.
   Put `.idea/` in your global gitignore, or worktree cleanup counts it as unsaved work.
@@ -297,7 +298,7 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 | Watch one session on its own | Click the pop-out button on its tile. |
 | Continue a session on your phone | Click **rc** on its tile. Then open the Claude app and tap **Code**. |
 | Start a session and type to it | Click **New session**, pick a folder, click **Start session**. Type in its console. |
-| Open a Terminal window | Click **Terminal** at the top, or press `T`. It opens in the folder from **Settings → Open Terminal in**, without asking. |
+| Open a terminal | Click **Terminal** at the top, or press `T`. A shell starts in the folder from **Settings → Start terminals in**, on a green tile with its screen. Click the tile to type in it. It keeps running when the app quits. |
 | See the changes of a session started here | Click **Open in …** in its details, or right-click it. Its folder opens in the IDE from Settings. |
 | Stop using a terminal for a session | Open its details and click **Move here**, once it is idle. |
 | Change a session's model, effort or mode | Click it in the tile's footer and pick another, or right-click the tile. |
@@ -322,7 +323,7 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 | `1` – `9` | Select a tile |
 | `←` `→` | Move between tiles |
 | `N` | Start a new session |
-| `T` | Open a Terminal window |
+| `T` | Open a terminal |
 | `↵` | Open the selected session: its console, or its IDE |
 | `Space` | Show or hide its details |
 | `A` / `R` | Approve or reject |

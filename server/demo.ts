@@ -160,7 +160,7 @@ export async function startDemo(opts: { port?: number; sessions?: number } = {})
       case "/api/sessions/new":
         return send(res, 200, { ok: false, message: "In the app, this starts Claude Code in the folder you pick, with a console here." });
       case "/api/terminal":
-        return send(res, 200, { ok: true, message: `In the app, this opens a Terminal window in ${snap.settings.terminalFolder}.` });
+        return send(res, 200, { ok: true, message: `In the app, this opens a terminal here, in ${snap.settings.terminalFolder}.` });
       case "/api/settings": {
         const b = await body<Partial<Settings>>(req);
         const patch: Partial<Settings> = {};

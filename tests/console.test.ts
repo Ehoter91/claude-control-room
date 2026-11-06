@@ -1,6 +1,6 @@
 // Sessions that run in Control Room, and their console, against a real tmux server of the test's own.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -21,6 +21,9 @@ describe("hosted sessions", () => {
   it("knows its own session names only", () => {
     expect(hosted.isHostedName("cr-0a1b2c3d")).toBe(true);
     for (const name of ["cr-0a1b2c3", "cr-0A1B2C3D", "work", "cr-0a1b2c3d;rm", 7, null]) expect(hosted.isHostedName(name)).toBe(false);
+    expect(hosted.isHostedName("crt-0a1b2c3d")).toBe(true);
+    expect(hosted.isTerminalName("crt-0a1b2c3d")).toBe(true);
+    expect(hosted.isTerminalName("cr-0a1b2c3d")).toBe(false);
     expect(hosted.hostedName("cr-0a1b2c3d:@0.%0")).toBe("cr-0a1b2c3d");
     expect(hosted.hostedName("dev:@1.%3")).toBeNull();
     expect(hosted.hostedName(null)).toBeNull();
@@ -194,6 +197,25 @@ describe.skipIf(!TMUX)("console on a real tmux", () => {
     tmux("kill-session", "-t", `=${name}`);
     await until(() => events.some((e) => e.type === "exit"));
     off();
+  });
+
+  it("starts a terminal in the folder, shows its screen, and closes it", async () => {
+    mkdirSync(join(home, ".claude-control-room"), { recursive: true });
+    const dir = mkdtempSync(join(tmpdir(), "cr-term-"));
+    const r = await hosted.startShell(dir, "/bin/sh");
+    expect(r.ok).toBe(true);
+    expect(hosted.isTerminalName(r.name!)).toBe(true);
+    const pane = (await hosted.hostedPanes())!.find((p) => p.name === r.name)!;
+    expect(pane.cwd).toBe(realpathSync(dir));
+    expect(pane.command).toMatch(/^(sh|bash)$/); // macOS's sh is bash
+    expect(pane.pid).toBeGreaterThan(0);
+
+    expect(consoles.typeInConsole(r.name!, "echo hi-$((40+2))\r")).toBe(true);
+    await until(() => tmux("capture-pane", "-p", "-t", `=${r.name}:`).includes("hi-42"));
+    expect((await hosted.screenLines(r.name!, 3)).at(-2)).toBe("hi-42");
+
+    expect(await consoles.stopConsole(r.name!)).toBe(true);
+    expect((await hosted.hostedPanes())!.some((p) => p.name === r.name)).toBe(false);
   });
 
   it("ends a console at once when its session does not exist", async () => {

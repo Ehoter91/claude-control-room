@@ -74,6 +74,7 @@ export function alertOnChange(prev: Snapshot | null, next: Snapshot): void {
   const before = new Map((prev?.sessions ?? []).map((s) => [s.sessionId, s]));
   let chime: Chime | null = null;
   for (const s of next.sessions) {
+    if (s.terminal) continue; // a command that ends in a terminal is no news
     const old = before.get(s.sessionId);
     if (s.activity.kind === "working" && !workingSince.has(s.sessionId)) workingSince.set(s.sessionId, s.activity.since);
     if (!prev || !old || old.activity.kind === s.activity.kind) continue;

@@ -90,7 +90,7 @@ export function TopBar({ snap }: { snap: Snapshot | null }) {
         </IconButton>
         {snap && !VIEW.wallOnly && VIEW.sessionPid === null && <UpdatePill snap={snap} />}
         {cfg && !VIEW.wallOnly && VIEW.sessionPid === null && (
-          <button type="button" className="btn btn-ghost btn-sm" data-tip={`Open Terminal in ${cfg.terminalFolder} (T)`} data-tip-side="bottom" onClick={() => void openTerminal()}>
+          <button type="button" className="btn btn-ghost btn-sm btn-terminal" data-tip={`New terminal here, in ${cfg.terminalFolder} (T)`} data-tip-side="bottom" onClick={() => void openTerminal()}>
             <SquareTerminal size={14} /> Terminal
           </button>
         )}

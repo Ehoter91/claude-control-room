@@ -231,7 +231,7 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
           <CodeXml size={15} /> Open in {ide}
         </button>
       )}
-      <RemoteButton s={s} look="button" />
+      {!s.terminal && <RemoteButton s={s} look="button" />}
       {s.pr && (
         <button type="button" className="btn btn-ghost" onClick={() => openUrl(s.pr!.url)}>
           <GitPullRequest size={15} /> PR #{s.pr.number}
@@ -251,12 +251,12 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
         </button>
       )}
       <button type="button" className="btn btn-danger-ghost detail-close-btn" onClick={() => setState({ closing: s.pid })}>
-        <X size={15} /> Close…
+        <X size={15} /> {s.terminal ? "Close terminal…" : "Close…"}
       </button>
     </div>
   );
   return (
-    <div className={`detail detail-${variant} st-${a.kind} console-${consoleView} ${consoleHeight ? "console-sized" : ""}`}>
+    <div className={`detail detail-${variant} st-${a.kind} ${s.terminal ? "is-terminal" : ""} console-${consoleView} ${consoleHeight ? "console-sized" : ""}`}>
       {compact ? (
         <div className="detail-top">
           {head}
@@ -275,7 +275,9 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
         <div className="detail-console">
           <ConsoleFrame edges={consoleView !== "normal" || variant === "popout" ? "none" : variant === "drawer" ? "all" : "ends"} height={consoleHeight}>
             <Suspense fallback={<div className="console" />}>
+              {/* One console per session: the next one on show starts fresh, and takes the keyboard when asked. */}
               <Console
+                key={tmuxName}
                 name={tmuxName}
                 autoFocus={variant === "popout" || typeInto}
                 onFocused={() => typeInto && setState({ typeInto: null })}
@@ -291,10 +293,13 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
 
       <div className={`detail-body ${tmuxName ? "is-compact" : ""}`}>
         <dl className="dl">
-          <Row label="Repository">
-            {s.repoName}
-            {g?.isWorktree && <span className="muted"> · worktree {folderName(g.root)}</span>}
-          </Row>
+          {/* A terminal outside a repository has only its folder, which its header shows. */}
+          {(!s.terminal || g) && (
+            <Row label="Repository">
+              {s.repoName}
+              {g?.isWorktree && <span className="muted"> · worktree {folderName(g.root)}</span>}
+            </Row>
+          )}
           {g?.branch && (
             <Row label="Branch">
               <span className="mono">{g.branch}</span>
@@ -336,13 +341,15 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
               )}
             </Row>
           )}
-          <Row label="Runs with">
-            <span className="tune-row">
-              <TuneChips s={s} />
-            </span>
-            {s.contextPercent !== null && <span className="muted"> · context {Math.round(s.contextPercent)}%</span>}
-            {money(s.costUsd) && <span className="muted"> · {money(s.costUsd)}</span>}
-          </Row>
+          {!s.terminal && (
+            <Row label="Runs with">
+              <span className="tune-row">
+                <TuneChips s={s} />
+              </span>
+              {s.contextPercent !== null && <span className="muted"> · context {Math.round(s.contextPercent)}%</span>}
+              {money(s.costUsd) && <span className="muted"> · {money(s.costUsd)}</span>}
+            </Row>
+          )}
           <Row label="Started">
             {startedLabel(s.startedAt, now)} <span className="muted">· {duration(now - s.startedAt)} ago</span>
           </Row>

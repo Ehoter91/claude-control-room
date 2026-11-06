@@ -106,9 +106,10 @@ export function useIdeName(): string {
   return useStore((st) => ideName(st.snapshot?.settings.ide ?? "vscode"));
 }
 
-/** A new Terminal window in the folder from Settings. */
-export function openTerminal(): Promise<ActionResult> {
-  return act("terminal", "/api/terminal", {}, true);
+/** A new terminal in Control Room, in the folder from Settings. Its console opens, ready to type. */
+export async function openTerminal(): Promise<void> {
+  const r = (await act("terminal", "/api/terminal", {}, true)) as ActionResult & { pid?: number };
+  if (r.ok && r.pid) setState({ drawer: r.pid, selected: r.pid, typeInto: r.pid });
 }
 
 /** Opens the session's folder in the IDE from Settings, to see its changes. */
@@ -190,6 +191,8 @@ export function needsYou(s: Session): boolean {
 }
 
 export function matchesFilter(s: Session, f: Filter): boolean {
+  // The filters sort Claude Code by what it does; a terminal shows under All.
+  if (s.terminal) return f === "all";
   switch (f) {
     case "all":
       return true;

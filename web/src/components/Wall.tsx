@@ -8,6 +8,7 @@ import { native, openWallWindow, type DisplayInfo } from "../lib/native.ts";
 import { api, matchesFilter, remember, setState, useStore, VIEW, type Filter } from "../store.ts";
 import { Monitor } from "./Monitor.tsx";
 import { FocusView } from "./FocusView.tsx";
+import { TerminalTile } from "./TerminalTile.tsx";
 
 const GAP = 14;
 
@@ -171,9 +172,13 @@ export function Wall({ sessions, layout }: { sessions: Session[]; layout: Settin
         <LayoutGroup>
           <div className="wall-grid" style={style}>
             <AnimatePresence mode="popLayout">
-              {shown.map((s, i) => (
-                <Monitor key={s.sessionId} s={s} index={i} selected={selected === s.pid} />
-              ))}
+              {shown.map((s, i) =>
+                s.terminal ? (
+                  <TerminalTile key={s.sessionId} s={s} index={i} selected={selected === s.pid} />
+                ) : (
+                  <Monitor key={s.sessionId} s={s} index={i} selected={selected === s.pid} />
+                ),
+              )}
             </AnimatePresence>
           </div>
         </LayoutGroup>

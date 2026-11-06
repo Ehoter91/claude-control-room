@@ -1,3 +1,4 @@
+import { SquareTerminal } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect } from "react";
 import type { Session } from "../../../shared/types.ts";
@@ -31,14 +32,14 @@ export function FocusView({ sessions }: { sessions: Session[] }) {
             layout
             key={s.sessionId}
             type="button"
-            className={`focus-row st-${s.activity.kind} ${current?.pid === s.pid ? "is-on" : ""} ${menuPid === s.pid ? "has-menu" : ""}`}
+            className={`focus-row st-${s.activity.kind} ${s.terminal ? "is-terminal" : ""} ${current?.pid === s.pid ? "is-on" : ""} ${menuPid === s.pid ? "has-menu" : ""}`}
             onClick={() => setState({ selected: s.pid })}
             onContextMenu={(e) => openMenu(e, s.pid)}
             data-pid={s.pid}
             draggable
           >
             <span className="mon-key">{i < 9 ? i + 1 : ""}</span>
-            <StatusOrb kind={s.activity.kind} size={9} />
+            {s.terminal ? <SquareTerminal size={12} className="term-mark" aria-label="Terminal" /> : <StatusOrb kind={s.activity.kind} size={9} />}
             <span className="focus-row-text">
               <span className="focus-row-name">{s.name}</span>
               <span className="focus-row-status">
