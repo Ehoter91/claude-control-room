@@ -1,7 +1,20 @@
 import { ArrowUpRight, Check, CircleCheck, Coffee, FolderGit2, Moon, RefreshCw, Sparkles, UserRound } from "lucide-react";
 import type { RateWindow, Session, Snapshot, Usage } from "../../../shared/types.ts";
 import { duration, plural, resetLabel } from "../lib/format.ts";
-import { act, needsYou, openMenu, openSession, remember, setState, useStore, type Filter } from "../store.ts";
+import {
+  accountChoices,
+  accountFilterOf,
+  act,
+  matchesAccount,
+  needsYou,
+  openMenu,
+  openSession,
+  remember,
+  setAccountFilter,
+  setState,
+  useStore,
+  type Filter,
+} from "../store.ts";
 import { openUrl, PrChip } from "./Monitor.tsx";
 import { Meter, StatusOrb, Toggle, useNow } from "./Primitives.tsx";
 
@@ -14,6 +27,9 @@ export const GROUPS: { id: Filter; label: string; kinds: string[]; color: string
 
 function SessionsCard({ sessions }: { sessions: Session[] }) {
   const counts = GROUPS.map((g) => sessions.filter((s) => g.kinds.includes(s.activity.kind)).length);
+  // A selector must give the same value back each time, so the list is made from the snapshot here.
+  const choices = accountChoices(useStore((s) => s.snapshot));
+  const account = useStore(accountFilterOf);
   const total = sessions.length;
   const pick = (f: Filter) => {
     setState({ filter: f });
@@ -37,6 +53,21 @@ function SessionsCard({ sessions }: { sessions: Session[] }) {
           </button>
         ))}
       </div>
+      {choices.length > 0 && (
+        // Click one to see only its sessions; click it again for all.
+        <div className="card-accounts">
+          {choices.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={`account-count ${c.id === "default" ? "" : "is-account"} ${account === c.id ? "is-on" : ""}`}
+              onClick={() => setAccountFilter(account === c.id ? "" : c.id)}
+            >
+              <b>{sessions.filter((s) => matchesAccount(s, c.id)).length}</b> {c.label}
+            </button>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

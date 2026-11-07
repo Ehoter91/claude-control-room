@@ -145,6 +145,7 @@ Add one in **Settings → Claude accounts**: a name, such as Personal, and a fol
 The sign-in opens in a private window (Chrome, Brave, Edge or Firefox, the first one you have), so your browser's own claude.ai stays signed in to your work account.
 
 **New session** then asks which account to use. A session on another account has its name in pink on the tile, in Focus and in its details.
+To see one account's sessions, pick it next to the filters above the wall, or click its count in the Sessions card. **Default** is every session that is not on another account.
 Sessions you start yourself show up too: `CLAUDE_CONFIG_DIR=~/.claude-personal claude`.
 The usage card shows each account's limits, once **Connect Claude Code** has added the status line to that account as well.
 **Move here**, **Copy resume command** and the model and effort switches keep each session on its own account.
@@ -340,7 +341,8 @@ In a session's right-click menu, the keys act on that session, and `1` – `4` p
 | `⌘T` or `T` | Open a terminal |
 | `⌘,` | Settings |
 | `⌘/` or `?` | Keyboard shortcuts |
-| `⌘⇧]` `⌘⇧[`, `⌃⇥` `⌃⇧⇥`, or `→` `←` | Next or previous session |
+| `⌘K` or `⌘E` | Go to a session: type part of its name, repo or branch, then `↵` |
+| `⌘↓` `⌘↑`, `⌃⇥` `⌃⇧⇥`, or `→` `←` | Next or previous session |
 | `↑` `↓` | The session above or below |
 | `Home` / `End` | The first or last session |
 | `⌘1` – `⌘9` or `1` – `9` | Go to that session |

@@ -8,8 +8,9 @@ export const KEYS = {
   settings: { keys: ["⌘,"], label: "Settings" },
   help: { keys: ["⌘/", "?"], label: "Keyboard shortcuts" },
   layout: { keys: ["F"], label: "Switch between Focus and Fit" },
-  next: { keys: ["⌘⇧]", "⌃⇥", "→"], label: "Next session" },
-  prev: { keys: ["⌘⇧[", "⌃⇧⇥", "←"], label: "Previous session" },
+  jump: { keys: ["⌘K", "⌘E"], label: "Go to a session: type part of its name" },
+  next: { keys: ["⌘↓", "⌃⇥", "→"], label: "Next session" },
+  prev: { keys: ["⌘↑", "⌃⇧⇥", "←"], label: "Previous session" },
   below: { keys: ["↓"], label: "The session below" },
   above: { keys: ["↑"], label: "The session above" },
   ends: { keys: ["Home", "End"], label: "The first or last session" },
@@ -38,7 +39,7 @@ export type KeyId = keyof typeof KEYS;
 
 export const KEY_GROUPS: { title: string; ids: KeyId[] }[] = [
   { title: "Start", ids: ["newSession", "newTerminal", "settings", "help", "layout"] },
-  { title: "Move between sessions", ids: ["next", "prev", "below", "above", "ends", "pick"] },
+  { title: "Move between sessions", ids: ["jump", "next", "prev", "below", "above", "ends", "pick"] },
   { title: "The selected session", ids: ["open", "leave", "details", "rename", "approve", "reject", "answer", "pr", "close", "back"] },
   { title: "More for it", ids: ["ide", "popout", "remote", "finder", "moveFront", "moveEnd", "copyResume", "copyId"] },
 ];
@@ -55,7 +56,10 @@ export type SessionKey =
 
 type SessionCommand = { id: "rename" | "popout" | "finder" | "copyResume" | "copyId" };
 
-export type Command = { id: "newSession" | "newTerminal" | "settings" | "help" | "next" | "prev" | "leave" } | { id: "pick"; n: number } | SessionCommand;
+export type Command =
+  | { id: "newSession" | "newTerminal" | "settings" | "help" | "jump" | "next" | "prev" | "leave" }
+  | { id: "pick"; n: number }
+  | SessionCommand;
 
 /**
  * The shortcut a key press is, of those that work everywhere: in a console, too, where every other key goes to the
@@ -77,14 +81,14 @@ export function commandOf(e: KeyboardEvent): Command | null {
     if (e.shiftKey && e.key === "Escape") return { id: "leave" };
     return null;
   }
-  if (e.shiftKey) {
-    if (e.code === "BracketRight") return { id: "next" };
-    if (e.code === "BracketLeft") return { id: "prev" };
-    if (e.code === "KeyC") return { id: "copyResume" };
-    return null;
-  }
+  if (e.shiftKey) return e.code === "KeyC" ? { id: "copyResume" } : null;
+  // Up and down the list, as ⌘ and an arrow go to the top or bottom of one elsewhere on a Mac.
+  if (e.key === "ArrowDown") return { id: "next" };
+  if (e.key === "ArrowUp") return { id: "prev" };
   if (/^[1-9]$/.test(e.key)) return { id: "pick", n: Number(e.key) };
   const key = e.key.toLowerCase();
+  // ⌘K finds as in Slack and VS Code; ⌘E is PyCharm's Recent Files.
+  if (key === "k" || key === "e") return { id: "jump" };
   return key === "n" ? { id: "newSession" } : key === "t" ? { id: "newTerminal" } : key === "," ? { id: "settings" } : key === "/" ? { id: "help" } : null;
 }
 
