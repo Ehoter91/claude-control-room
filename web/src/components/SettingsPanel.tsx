@@ -7,6 +7,7 @@ import { playChime } from "../lib/alerts.ts";
 import { native } from "../lib/native.ts";
 import { act, api, setState, toast, useStore } from "../store.ts";
 import { Toggle } from "./Primitives.tsx";
+import { AccountsSection } from "./AccountsSection.tsx";
 import { UpdateSection } from "./UpdateSection.tsx";
 
 function Line(props: { title: string; text: React.ReactNode; children: React.ReactNode }) {
@@ -65,6 +66,7 @@ export function SettingsPanel({ snap }: { snap: Snapshot }) {
   const cfg = snap.settings;
   const setup = snap.setup;
   const save = (patch: object) => void api("/api/settings", patch);
+  const connected = setup.statusLine === "installed" && setup.hooks && snap.otherAccounts.every((a) => a.connected);
   const close = () => setState({ panel: null });
 
   return (
@@ -143,18 +145,22 @@ export function SettingsPanel({ snap }: { snap: Snapshot }) {
             <Toggle label="Show VS Code panel sessions" on={cfg.includeIdePanel} onChange={(on) => save({ includeIdePanel: on })} />
           </Line>
 
+          <AccountsSection snap={snap} />
+
           <h4 className="set-section">Connections</h4>
           <Line
             title="Claude Code"
             text={
-              setup.statusLine === "installed" && setup.hooks
-                ? "Connected: usage limits, model, effort, context and what each approval asks reach the dashboard."
-                : setup.statusLine === "foreign"
-                  ? "You have your own status line. Connecting keeps it showing, adds a quiet permission hook, and reads the data. Your settings are backed up first."
-                  : "Adds a small status line and a quiet background permission hook to ~/.claude/settings.json, so usage, model, effort and each approval's details reach the dashboard. Your settings are backed up first."
+              connected
+                ? `Connected: usage limits, model, effort, context and what each approval asks reach the dashboard${snap.otherAccounts.length ? ", from every account" : ""}.`
+                : setup.statusLine === "installed" && setup.hooks
+                  ? "Connected, but not yet for every account. Connect again to add the new ones; their settings are backed up first."
+                  : setup.statusLine === "foreign"
+                    ? "You have your own status line. Connecting keeps it showing, adds a quiet permission hook, and reads the data. Your settings are backed up first."
+                    : `Adds a small status line and a quiet background permission hook to ~/.claude/settings.json${snap.otherAccounts.length ? " and every other account's" : ""}, so usage, model, effort and each approval's details reach the dashboard. Your settings are backed up first.`
             }
           >
-            {setup.statusLine === "installed" && setup.hooks ? (
+            {connected ? (
               <button type="button" className="btn btn-ghost btn-sm" disabled={busy.statusline} onClick={() => void act("statusline", "/api/setup/statusline", { install: false })}>
                 Disconnect
               </button>

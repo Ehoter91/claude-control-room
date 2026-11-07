@@ -138,6 +138,17 @@ It keeps running on your Mac, so you can reply from your phone or from the termi
 A green **rc** means the session is on your phone. Click it to open the session at claude.ai.
 It works while Claude is busy too. Only a session that is asking you something must get its answer first.
 
+### Two Claude accounts
+
+Keep a personal account next to your work one. Claude Code keeps each login in its own config folder (`CLAUDE_CONFIG_DIR`), and Control Room reads them all.
+Add one in **Settings → Claude accounts**: a name, such as Personal, and a folder, such as `~/.claude-personal`. Click **Sign in** and pick the account in your browser.
+
+**New session** then asks which account to use. A session on another account has its name in pink on the tile, in Focus and in its details.
+Sessions you start yourself show up too: `CLAUDE_CONFIG_DIR=~/.claude-personal claude`.
+The usage card shows each account's limits, once **Connect Claude Code** has added the status line to that account as well.
+**Move here**, **Copy resume command** and the model and effort switches keep each session on its own account.
+Removing an account takes it out of Control Room only. Its folder and login stay.
+
 ### Names you choose
 
 A tile has the same name as the session's VS Code terminal tab.
@@ -243,7 +254,7 @@ If macOS ever blocks it, open **System Settings → Privacy & Security** and cli
 
 A banner at the top of the dashboard offers two steps:
 
-1. **Connect Claude Code.** This adds a status line and a quiet `PermissionRequest` hook to `~/.claude/settings.json`. It saves a backup first.
+1. **Connect Claude Code.** This adds a status line and a quiet `PermissionRequest` hook to `~/.claude/settings.json`, and to the `settings.json` of each other Claude account. It saves a backup first.
    With them, the dashboard knows your usage limits, the model, the effort, and what each approval asks.
    The status line also shows `model · effort · context · 5h · week` in your terminal.
    **Settings → Claude Code → Disconnect** removes both and gives your old status line back.
@@ -298,6 +309,7 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 | Watch one session on its own | Click the pop-out button on its tile. |
 | Continue a session on your phone | Click **rc** on its tile. Then open the Claude app and tap **Code**. |
 | Start a session and type to it | Click **New session**, pick a folder, click **Start session**. Type in its console. |
+| Use a second Claude account | Add it in **Settings → Claude accounts** and sign in. Then pick it under **Account** in **New session**. |
 | Open a terminal | Click **Terminal** at the top, or press `T`. A shell starts in the folder from **Settings → Start terminals in**, on a green tile with its screen. Click the tile to type in it. It keeps running when the app quits. |
 | See the changes of a session started here | Click **Open in …** in its details, or right-click it. Its folder opens in the IDE from Settings. |
 | Stop using a terminal for a session | Open its details and click **Move here**, once it is idle. |
@@ -345,7 +357,7 @@ There is no database and no cloud service. About once a second, the app reads:
 
 | Source | What it gives |
 |---|---|
-| `~/.claude/sessions/<pid>.json` (written by Claude Code) | which sessions are alive, their status, why one waits, and whether Remote Control is on |
+| `~/.claude/sessions/<pid>.json` (written by Claude Code), and the same in each other account's folder | which sessions are alive, their status, why one waits, and whether Remote Control is on |
 | the process table | that each session is still a running `claude` process, and its terminal |
 | the transcript `~/.claude/projects/…/<session>.jsonl` | the conversation, the current tool call, the title, PR links. It reads only the new bytes each time. |
 | the status line tap | model, effort, context size, cost and usage limits |
@@ -388,9 +400,10 @@ The console is a tmux control-mode client: it streams the session's output to th
 - Model and effort change only on an idle session, and the mode never while the session asks you something: Shift+Tab there would approve edits.
 - Shortcut tokens stay in `~/.claude-control-room/config.json`. The page only ever sees their last four characters.
 - The only calls that leave your Mac are: GitHub, through your own `gh`; Shortcut, only if you add a token; and your own `claude` command, for your account status and the short summaries.
+  A session's summary runs on its own account.
 - After **rc**, Claude Code itself shares that session with your claude.ai account, as `/remote-control` always does. Control Room sends nothing there.
-- The app keeps its own settings and caches in `~/.claude-control-room/`. The only change it makes to Claude Code is the status line and hook in `~/.claude/settings.json`. You add them with **Connect** and remove them with **Disconnect**.
-- `/model` and `/effort` also save the choice as your default for new sessions. After a change from a tile, Control Room puts your previous `model` and effort defaults back in `~/.claude/settings.json`, and touches nothing else there.
+- The app keeps its own settings and caches in `~/.claude-control-room/`. The only change it makes to Claude Code is the status line and hook in `~/.claude/settings.json`, and in each other account's `settings.json`. You add them with **Connect** and remove them with **Disconnect**.
+- `/model` and `/effort` also save the choice as your default for new sessions. After a change from a tile, Control Room puts your previous `model` and effort defaults back in the session's account's `settings.json`, and touches nothing else there.
 
 </details>
 

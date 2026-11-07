@@ -138,6 +138,7 @@ export interface Session {
   hosted: boolean; // runs in Control Room's own tmux, so its console works here
   remoteUrl: string | null; // claude.ai link while Remote Control is on
   terminal: TerminalInfo | null; // set for a terminal: then pid is its shell's, and sessionId its tmux name
+  account: AccountRef | null; // the other Claude account it runs on; null for the usual one
 }
 
 export interface RateWindow {
@@ -156,6 +157,17 @@ export interface Account {
   orgName: string | null;
   plan: string | null;
   loggedIn: boolean;
+}
+
+/** A Claude account besides the usual one: its own login, in its own Claude Code config folder (CLAUDE_CONFIG_DIR). */
+export interface AccountRef {
+  label: string; // "Personal"
+  dir: string; // absolute
+}
+
+export interface OtherAccount extends Account, AccountRef {
+  usage: Usage;
+  connected: boolean; // Control Room's status line and hook are in its settings too
 }
 
 export interface PowerState {
@@ -184,6 +196,7 @@ export interface Settings {
   terminalFolder: string; // where a new terminal starts
   layout: "fit" | "comfortable" | "focus";
   shortcutTokens: string[]; // masked when sent to the UI
+  accounts: AccountRef[]; // Claude accounts besides the one in ~/.claude
 }
 
 export interface Snapshot {
@@ -191,6 +204,7 @@ export interface Snapshot {
   sessions: Session[];
   usage: Usage;
   account: Account;
+  otherAccounts: OtherAccount[]; // in the order of Settings
   power: PowerState;
   setup: SetupState;
   settings: Settings;

@@ -5,7 +5,7 @@ import type { ChatLine, Session } from "../../../shared/types.ts";
 import { duration, folderName, money, startedLabel } from "../lib/format.ts";
 import { popoutSession } from "../lib/native.ts";
 import { act, api, consoleName, getState, openInIde, setState, useIdeName, useOpenName, useStore } from "../store.ts";
-import { ApprovalCard, NameEditor, openUrl, PrChip, QuestionCard, RemoteButton, RenameButton } from "./Monitor.tsx";
+import { AccountChip, ApprovalCard, NameEditor, openUrl, PrChip, QuestionCard, RemoteButton, RenameButton } from "./Monitor.tsx";
 import { StatusOrb, useNow } from "./Primitives.tsx";
 import { TuneChips } from "./Tuning.tsx";
 import { dragFrom, keepSizes, setConsoleHeight, setDrawerWidth } from "../lib/resize.ts";
@@ -189,6 +189,7 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
         <StatusOrb kind={a.kind} size={12} />
         <span className="detail-status-label">{a.label}</span>
         <span className="detail-status-time">· {duration(now - a.since)}</span>
+        <AccountChip s={s} />
         {variant === "drawer" && (
           <button type="button" className="icon-btn detail-close" aria-label="Close details" onClick={() => setState({ drawer: null })}>
             <X size={16} />

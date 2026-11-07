@@ -43,6 +43,7 @@ export function FocusView({ sessions }: { sessions: Session[] }) {
             <span className="focus-row-text">
               <span className="focus-row-name">{s.name}</span>
               <span className="focus-row-status">
+                {s.account && <span className="focus-row-account">{s.account.label} · </span>}
                 {s.activity.label} · {duration(now - s.activity.since)}
               </span>
             </span>

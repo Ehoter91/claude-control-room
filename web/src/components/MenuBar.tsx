@@ -1,5 +1,5 @@
 import { ArrowUpRight, Bell, BellOff, ChevronDown, CodeXml, Coffee, Ellipsis, LayoutDashboard, Monitor as Screen, Moon, Volume2, VolumeX } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RateWindow, Session, Snapshot } from "../../../shared/types.ts";
 import { playChime } from "../lib/alerts.ts";
 import { duration, plural } from "../lib/format.ts";
@@ -154,8 +154,20 @@ function Usage({ snap }: { snap: Snapshot }) {
       </h4>
       {setup.statusLine === "installed" ? (
         <>
+          {snap.otherAccounts.length > 0 && <div className="mb-use-account">Default</div>}
           <UseLine label="5-hour" w={usage.fiveHour} now={now} />
           <UseLine label="Week" w={usage.sevenDay} now={now} />
+          {snap.otherAccounts
+            .filter((a) => a.connected)
+            .map((a) => (
+              <Fragment key={a.dir}>
+                <div className="mb-use-account">
+                  {a.label} {a.plan && <span className="plan-pill">{a.plan}</span>}
+                </div>
+                <UseLine label="5-hour" w={a.usage.fiveHour} now={now} />
+                <UseLine label="Week" w={a.usage.sevenDay} now={now} />
+              </Fragment>
+            ))}
         </>
       ) : (
         <p className="mb-note">Connect Claude Code in the dashboard to see your limits.</p>

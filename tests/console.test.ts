@@ -1,6 +1,6 @@
 // Sessions that run in Control Room, and their console, against a real tmux server of the test's own.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -41,6 +41,14 @@ describe("hosted sessions", () => {
     expect(hosted.newSessionArgs("cr-0a1b2c3d", { cwd: "/repo" }).at(-1)).toBe("claude");
     const tuned = hosted.newSessionArgs("cr-0a1b2c3d", { cwd: "/repo", prompt: "hi", model: "opus[1m]", effort: "high", mode: "plan" });
     expect(tuned.slice(tuned.indexOf("claude", tuned.indexOf("-lic") + 2))).toEqual(["claude", "--model", "opus[1m]", "--effort", "high", "--permission-mode", "plan", "--", "hi"]);
+  });
+
+  it("starts Claude Code on another account by its config folder, and on the usual one without", () => {
+    const args = hosted.newSessionArgs("cr-0a1b2c3d", { cwd: "/repo", prompt: "hi", account: { label: "Personal", dir: "/Users/me/my claude" } }, "/bin/zsh");
+    expect(args.slice(args.indexOf("/bin/zsh"))).toEqual(["/bin/zsh", "-lic", 'export CLAUDE_CONFIG_DIR="$1"; shift; claude "$@"', "claude", "/Users/me/my claude", "--", "hi"]);
+    expect(hosted.newSessionArgs("cr-0a1b2c3d", { cwd: "/repo", prompt: "hi" }, "/bin/zsh").slice(-5)).toEqual(["-lic", 'claude "$@"', "claude", "--", "hi"]);
+    // One that Control Room was started with stays out of every session.
+    expect(hosted.sessionEnv({ PATH: "/bin", CLAUDE_CONFIG_DIR: "/elsewhere" }).CLAUDE_CONFIG_DIR).toBeUndefined();
   });
 
   it("starts Claude Code without the variables of whoever started Control Room", () => {
@@ -233,3 +241,89 @@ async function until(check: () => boolean, ms = 5_000): Promise<void> {
     await new Promise((r) => setTimeout(r, 50));
   }
 }
+
+describe("other Claude accounts", () => {
+  const personal = { label: "Personal", dir: join(home, ".claude-personal") };
+  const write = (file: string, data: unknown, mtime?: number) => {
+    mkdirSync(join(file, ".."), { recursive: true });
+    writeFileSync(file, JSON.stringify(data));
+    if (mtime) utimesSync(file, mtime / 1000, mtime / 1000);
+  };
+
+  it("reads the sessions of every account, each marked with its account", async () => {
+    const { homes } = await import("../server/homes.ts");
+    const { readSessionFiles } = await import("../server/monitor.ts");
+    write(join(home, ".claude", "sessions", "111.json"), { pid: 111, sessionId: "work-1", cwd: "/w", kind: "interactive", entrypoint: "cli" });
+    write(join(personal.dir, "sessions", "222.json"), { pid: 222, sessionId: "home-1", cwd: "/h", kind: "interactive", entrypoint: "cli" });
+    const files = await readSessionFiles(homes([personal]));
+    expect(files.map((f) => [f.sessionId, f.account?.label ?? null]).sort()).toEqual([
+      ["home-1", "Personal"],
+      ["work-1", null],
+    ]);
+  });
+
+  it("takes each account's usage from the newest report of its own sessions", async () => {
+    const { homes } = await import("../server/homes.ts");
+    const { latestUsages } = await import("../server/statusline.ts");
+    const taps = join(home, ".claude-control-room", "statusline");
+    const soon = Math.floor(Date.now() / 1000) + 3600;
+    const tap = (id: string, transcript: string | null, five: number) => ({ session_id: id, transcript_path: transcript, rate_limits: { five_hour: { used_percentage: five, resets_at: soon } } });
+    const now = Date.now();
+    write(join(taps, "work-1.json"), tap("work-1", join(home, ".claude", "projects", "-w", "work-1.jsonl"), 40), now - 60_000);
+    write(join(taps, "home-1.json"), tap("home-1", join(personal.dir, "projects", "-h", "home-1.jsonl"), 10), now - 30_000);
+    // The newest report is from an account no longer in Settings: no account's.
+    write(join(taps, "gone-1.json"), tap("gone-1", join(home, ".claude-old", "projects", "-g", "gone-1.jsonl"), 99), now);
+    const [work, mine] = await latestUsages(homes([personal]));
+    expect(work.fiveHour?.usedPercent).toBe(40);
+    expect(mine.fiveHour?.usedPercent).toBe(10);
+  });
+
+  it("connects every account's settings, keeps each one's own status line, and puts each one back", async () => {
+    const { saveSettings } = await import("../server/config.ts");
+    const { installStatusLine, uninstallStatusLine, statusLineState } = await import("../server/statusline.ts");
+    const work = join(home, ".claude", "settings.json");
+    const mine = join(personal.dir, "settings.json");
+    const broken = { label: "Broken", dir: join(home, ".claude-broken") };
+    writeFileSync(work, JSON.stringify({ theme: "dark" }));
+    await saveSettings({ accounts: [broken, personal] });
+    try {
+      write(join(broken.dir, "settings.json"), {});
+      writeFileSync(join(broken.dir, "settings.json"), "{ not json");
+      write(mine, { statusLine: { type: "command", command: "echo mine" } });
+      const out = await installStatusLine();
+      // The file that does not parse stays as it is, and holds back neither of the others.
+      expect(out.ok).toBe(false);
+      expect(out.message).toContain(join(broken.dir, "settings.json"));
+      expect(readFileSync(join(broken.dir, "settings.json"), "utf8")).toBe("{ not json");
+      for (const dir of [join(home, ".claude"), personal.dir]) expect(await statusLineState(dir)).toEqual({ statusLine: "installed", hooks: true });
+      // Each account's script shows that account's own status line.
+      const tap = JSON.parse(readFileSync(mine, "utf8")).statusLine.command;
+      expect(tap).not.toBe(JSON.parse(readFileSync(work, "utf8")).statusLine.command);
+      expect(readFileSync(tap, "utf8")).toContain("echo mine");
+      await uninstallStatusLine();
+      expect(JSON.parse(readFileSync(work, "utf8"))).toEqual({ theme: "dark" });
+      expect(JSON.parse(readFileSync(mine, "utf8"))).toEqual({ statusLine: { type: "command", command: "echo mine" } });
+    } finally {
+      await saveSettings({ accounts: [] });
+    }
+  });
+
+  it("puts back an account's defaults even when it had no settings file before", async () => {
+    const { keepDefaults } = await import("../server/statusline.ts");
+    const fresh = join(home, ".claude-fresh");
+    await keepDefaults(async () => write(join(fresh, "settings.json"), { model: "sonnet", theme: "light" }), fresh);
+    expect(JSON.parse(readFileSync(join(fresh, "settings.json"), "utf8"))).toEqual({ theme: "light" });
+  });
+
+  it("runs claude for an account with its folder, and for the usual one without any", async () => {
+    const { claudeEnv } = await import("../server/homes.ts");
+    const { CHILD_ENV } = await import("../server/proc.ts");
+    expect(claudeEnv(personal).CLAUDE_CONFIG_DIR).toBe(personal.dir);
+    CHILD_ENV.CLAUDE_CONFIG_DIR = "/somewhere/else";
+    try {
+      expect(claudeEnv(null).CLAUDE_CONFIG_DIR).toBeUndefined();
+    } finally {
+      delete CHILD_ENV.CLAUDE_CONFIG_DIR;
+    }
+  });
+});

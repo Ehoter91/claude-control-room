@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { type Choice, EFFORTS, MODELS, MODES, modelAlias } from "../../../shared/claude.ts";
+import { type Choice, claudeCommand, EFFORTS, MODELS, MODES, modelAlias, shellQuote } from "../../../shared/claude.ts";
 import type { Session } from "../../../shared/types.ts";
 import { native, popoutSession } from "../lib/native.ts";
 import { act, api, openInIde, openSession, setState, toast, useIdeName, useOpenName, useStore } from "../store.ts";
@@ -105,10 +105,6 @@ function TuneRows({ s }: { s: Session }) {
       )}
     </>
   );
-}
-
-function shellQuote(text: string): string {
-  return `'${text.replace(/'/g, `'\\''`)}'`;
 }
 
 /** In a browser tab whose clipboard API refuses, the old copy command may still work. */
@@ -318,7 +314,7 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
               icon={<Copy size={14} />}
               label="Copy resume command"
               tip="To continue this conversation in any terminal"
-              onClick={run(() => copy(`cd ${shellQuote(s.cwd)} && claude --resume ${s.sessionId}`, "the resume command"))}
+              onClick={run(() => copy(`cd ${shellQuote(s.cwd)} && ${claudeCommand(s.account)} --resume ${s.sessionId}`, "the resume command"))}
             />
             <Item icon={<Copy size={14} />} label="Copy session ID" onClick={run(() => copy(s.sessionId, "the session ID"))} />
           </>

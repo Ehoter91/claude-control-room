@@ -39,14 +39,16 @@ function foundElsewhere(id: IdeId): boolean {
 // behind when the IDE quits, so only a pid that still runs an IDE counts.
 let connected: IdeId[] = [];
 
-export async function noteConnectedIdes(procs: Map<number, { comm: string }>): Promise<void> {
-  const dir = join(CLAUDE_DIR, "ide");
-  const files = (await readdir(dir).catch(() => [] as string[])).filter((f) => f.endsWith(".lock"));
+/** `homes` are the config folders of the Claude accounts: each keeps its own lock files. */
+export async function noteConnectedIdes(procs: Map<number, { comm: string }>, homes = [CLAUDE_DIR]): Promise<void> {
   const ids = new Set<IdeId>();
-  for (const f of files) {
-    const pid = await readFile(join(dir, f), "utf8").then((t) => Number(JSON.parse(t).pid), () => 0);
-    const ide = ideOf(procs.get(pid)?.comm ?? "");
-    if (ide) ids.add(ide);
+  for (const dir of homes.map((h) => join(h, "ide"))) {
+    const files = (await readdir(dir).catch(() => [] as string[])).filter((f) => f.endsWith(".lock"));
+    for (const f of files) {
+      const pid = await readFile(join(dir, f), "utf8").then((t) => Number(JSON.parse(t).pid), () => 0);
+      const ide = ideOf(procs.get(pid)?.comm ?? "");
+      if (ide) ids.add(ide);
+    }
   }
   connected = [...ids];
 }
