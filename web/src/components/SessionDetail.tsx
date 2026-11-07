@@ -229,7 +229,7 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
         </button>
       )}
       {tmuxName && (
-        <button type="button" className="btn btn-ghost" data-tip="Open its folder, to see the changes" onClick={() => void openInIde(s)}>
+        <button type="button" className="btn btn-ghost" data-tip={withKey("Open its folder, to see the changes", "ide")} onClick={() => void openInIde(s)}>
           <CodeXml size={15} /> Open in {ide}
         </button>
       )}
@@ -248,7 +248,7 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
         <FolderOpen size={15} />
       </button>
       {variant !== "popout" && (
-        <button type="button" className="btn btn-ghost btn-icon" data-tip="Pop out to its own window" aria-label="Pop out" onClick={() => popoutSession(s.pid)}>
+        <button type="button" className="btn btn-ghost btn-icon" data-tip={withKey("Pop out to its own window", "popout")} aria-label="Pop out" onClick={() => popoutSession(s.pid)}>
           <PictureInPicture2 size={15} />
         </button>
       )}

@@ -23,7 +23,7 @@ export function KeysPanel() {
         <div className="sheet-head">
           <div>
             <h2>Keyboard shortcuts</h2>
-            <p className="dialog-sub">The ⌘ ones work while you type in a console too. Esc closes this.</p>
+            <p className="dialog-sub">The ⌘ and F-key ones work while you type in a console too. In a session's right-click menu, the keys act on that session.</p>
           </div>
           <button type="button" className="icon-btn" aria-label="Close" onClick={close}>
             <X size={16} />

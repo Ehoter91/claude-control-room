@@ -18,10 +18,22 @@ import {
 } from "lucide-react";
 import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { type Choice, claudeCommand, EFFORTS, MODELS, MODES, modelAlias, shellQuote } from "../../../shared/claude.ts";
+import { type Choice, EFFORTS, MODELS, MODES, modelAlias } from "../../../shared/claude.ts";
 import type { Session } from "../../../shared/types.ts";
-import { native, popoutSession } from "../lib/native.ts";
-import { act, api, openInIde, openSession, setState, toast, useIdeName, useOpenName, useStore } from "../store.ts";
+import { type KeyId, KEYS } from "../lib/keys.ts";
+import { popoutSession } from "../lib/native.ts";
+import {
+  answerable,
+  copyResumeCommand,
+  copySessionId,
+  moveTo,
+  reachable,
+  remoteBlocked,
+  showDetails,
+  showInFinder,
+  toPhone,
+} from "../lib/sessionActions.ts";
+import { act, openInIde, openSession, setState, useIdeName, useOpenName, useStore } from "../store.ts";
 import { NameEditor, openUrl } from "./Monitor.tsx";
 import { StatusOrb } from "./Primitives.tsx";
 import { blocked, type What } from "./Tuning.tsx";
@@ -42,7 +54,9 @@ export function SessionMenu() {
   return <Menu key={`${at.pid}:${at.x}:${at.y}`} s={s} x={at.x} y={at.y} />;
 }
 
-function Item(props: { icon: ReactNode; label: string; meta?: string | null; tip?: string; danger?: boolean; disabled?: boolean; onClick: () => void }) {
+/** One action; `keys` names its shortcut, shown on its right, unless `meta` says something else there. */
+function Item(props: { icon: ReactNode; label: string; keys?: KeyId; meta?: string | null; tip?: string; danger?: boolean; disabled?: boolean; onClick: () => void }) {
+  const meta = props.meta !== undefined ? props.meta : props.keys ? KEYS[props.keys].keys[0] : null;
   return (
     <button
       type="button"
@@ -54,7 +68,7 @@ function Item(props: { icon: ReactNode; label: string; meta?: string | null; tip
     >
       <span className="ctx-icon">{props.icon}</span>
       <span className="ctx-label">{props.label}</span>
-      {props.meta && <span className="ctx-meta">{props.meta}</span>}
+      {meta && <span className="ctx-meta">{meta}</span>}
     </button>
   );
 }
@@ -107,28 +121,6 @@ function TuneRows({ s }: { s: Session }) {
   );
 }
 
-/** In a browser tab whose clipboard API refuses, the old copy command may still work. */
-function copyByCommand(text: string): boolean {
-  const box = document.createElement("textarea");
-  box.value = text;
-  box.style.position = "fixed";
-  box.style.opacity = "0";
-  document.body.appendChild(box);
-  box.select();
-  const ok = document.execCommand("copy");
-  box.remove();
-  return ok;
-}
-
-function copy(text: string, what: string): void {
-  void (native ? native.copyText(text) : navigator.clipboard.writeText(text))
-    .then(
-      () => true,
-      () => copyByCommand(text),
-    )
-    .then((ok) => toast(ok ? `Copied ${what}` : `Couldn't copy ${what}`, ok ? "ok" : "error"));
-}
-
 function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
   const box = useRef<HTMLDivElement>(null);
   const [style, setStyle] = useState<CSSProperties>({ left: x, top: y, visibility: "hidden" });
@@ -136,7 +128,6 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
   const renamingNow = useRef(false);
   renamingNow.current = renaming;
   const busy = useStore((st) => st.busy);
-  const focusLayout = useStore((st) => st.snapshot?.settings.layout === "focus");
   const order = useStore((st) => st.snapshot?.sessions);
   const tmuxReady = useStore((st) => st.snapshot?.setup.tmuxReady ?? false);
   const openIn = useOpenName(s);
@@ -180,7 +171,10 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
     };
   }, []);
 
-  // Up and down walk the menu, as in any menu; Enter or Space picks.
+  const needsHelper = s.ide === "vscode" && !s.vscodeLinked;
+
+  // Up and down walk the menu, as in any menu; Enter or Space picks. Each item's own key works too: the page's key
+  // handler sends it to this session while the menu is open.
   const walk = (e: React.KeyboardEvent) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
@@ -190,16 +184,11 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
     items[next]?.focus();
   };
 
-  const reachable = s.vscodeLinked || !!s.tmux;
   const q = a.question;
-  const answerable = reachable && a.kind === "question" && q && q.count === 1 && !q.multiSelect && q.options.length > 0;
-  const asking = a.kind === "approval" || a.kind === "question";
   const idle = a.kind === "idle" || a.kind === "inactive";
   const remoteOn = s.remoteUrl !== null;
-  const needsHelper = s.ide === "vscode" && !s.vscodeLinked;
   const first = order?.[0];
   const last = order?.[order.length - 1];
-  const place = (body: { above?: number; below?: number }) => act(`${s.pid}:place`, `/api/sessions/${s.pid}/place`, body, true);
   const move = async () => {
     const r = (await act(`${s.pid}:move`, `/api/sessions/${s.pid}/move`)) as { ok: boolean; pid?: number };
     if (r.ok && r.pid) setState({ drawer: r.pid, selected: r.pid, typeInto: r.pid });
@@ -227,16 +216,17 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
         </div>
       </div>
 
-      {a.kind === "approval" && reachable && (
+      {a.kind === "approval" && reachable(s) && (
         <div className="ctx-group">
           <div className="ctx-ask">{a.tool?.action ?? "A tool wants to run"}</div>
-          <Item icon={<Check size={14} />} label="Approve" meta="A" disabled={busy[`${s.pid}:approve`]} onClick={run(() => act(`${s.pid}:approve`, `/api/sessions/${s.pid}/approve`))} />
-          <Item icon={<X size={14} />} label="Reject" meta="R" disabled={busy[`${s.pid}:reject`]} onClick={run(() => act(`${s.pid}:reject`, `/api/sessions/${s.pid}/reject`))} />
+          <Item icon={<Check size={14} />} label="Approve" keys="approve" disabled={busy[`${s.pid}:approve`]} onClick={run(() => act(`${s.pid}:approve`, `/api/sessions/${s.pid}/approve`))} />
+          <Item icon={<X size={14} />} label="Reject" keys="reject" disabled={busy[`${s.pid}:reject`]} onClick={run(() => act(`${s.pid}:reject`, `/api/sessions/${s.pid}/reject`))} />
         </div>
       )}
-      {answerable && (
+      {answerable(s) && q && (
         <div className="ctx-group">
           {q.question && <div className="ctx-ask">{q.question}</div>}
+          {/* Its number is its key. */}
           {q.options.slice(0, 4).map((o, i) => (
             <Item
               key={o.label}
@@ -254,21 +244,16 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
         <Item
           icon={s.hosted ? <SquareTerminal size={14} /> : <CodeXml size={14} />}
           label={s.terminal ? "Type in it" : s.hosted ? "Type in its console" : `Open in ${openIn}`}
-          meta="↵"
+          keys="open"
           onClick={run(() => openSession(s))}
         />
-        {s.hosted && <Item icon={<CodeXml size={14} />} label={`Open in ${ide}`} tip="Open its folder, to see the changes" onClick={run(() => openInIde(s))} />}
-        <Item
-          icon={<PanelRight size={14} />}
-          label="Show details"
-          meta="Space"
-          onClick={run(() => setState(focusLayout ? { selected: s.pid } : { drawer: s.pid, selected: s.pid }))}
-        />
-        <Item icon={<PictureInPicture2 size={14} />} label="Pop out to its own window" onClick={run(() => popoutSession(s.pid))} />
+        {s.hosted && <Item icon={<CodeXml size={14} />} label={`Open in ${ide}`} keys="ide" tip="Open its folder, to see the changes" onClick={run(() => openInIde(s))} />}
+        <Item icon={<PanelRight size={14} />} label="Show details" keys="details" onClick={run(() => showDetails(s))} />
+        <Item icon={<PictureInPicture2 size={14} />} label="Pop out to its own window" keys="popout" onClick={run(() => popoutSession(s.pid))} />
         <Item
           icon={<Pencil size={14} />}
           label={s.vscodeLinked ? "Rename, on its VS Code tab too" : "Rename"}
-          meta="⇧F6"
+          keys="rename"
           tip={needsHelper ? "Renaming a VS Code session needs the VS Code helper (Settings)" : undefined}
           disabled={needsHelper || renaming}
           onClick={() => setRenaming(true)}
@@ -286,14 +271,15 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
           <Item
             icon={<Smartphone size={14} />}
             label={remoteOn ? "Open on claude.ai" : "Continue on your phone"}
-            tip={asking && !remoteOn ? "Answer the session first, then send it to your phone" : undefined}
-            disabled={busy[`${s.pid}:remote`] || (asking && !remoteOn)}
-            onClick={run(() => (s.remoteUrl ? openUrl(s.remoteUrl) : act(`${s.pid}:remote`, `/api/sessions/${s.pid}/remote`)))}
+            keys="remote"
+            tip={remoteBlocked(s) ?? undefined}
+            disabled={busy[`${s.pid}:remote`] || !!remoteBlocked(s)}
+            onClick={run(() => toPhone(s))}
           />
         )}
-        {s.pr && <Item icon={<GitPullRequest size={14} />} label={`Open PR #${s.pr.number}`} meta="P" onClick={run(() => openUrl(s.pr!.url))} />}
+        {s.pr && <Item icon={<GitPullRequest size={14} />} label={`Open PR #${s.pr.number}`} keys="pr" onClick={run(() => openUrl(s.pr!.url))} />}
         {s.story && <Item icon={<SquareKanban size={14} />} label="Open story" meta={`sc-${s.storyId}`} onClick={run(() => openUrl(s.story!.url))} />}
-        <Item icon={<FolderOpen size={14} />} label="Show folder in Finder" onClick={run(() => api("/api/open", { folder: s.git?.root ?? s.cwd }))} />
+        <Item icon={<FolderOpen size={14} />} label="Show folder in Finder" keys="finder" onClick={run(() => showInFinder(s))} />
         {!s.hosted && tmuxReady && (
           <Item
             icon={<MonitorDown size={14} />}
@@ -307,23 +293,24 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
       </div>
 
       <div className="ctx-group">
-        <Item icon={<ArrowUpToLine size={14} />} label="Move to the front" disabled={!first || first.pid === s.pid} onClick={run(() => place({ below: first!.pid }))} />
-        <Item icon={<ArrowDownToLine size={14} />} label="Move to the end" disabled={!last || last.pid === s.pid} onClick={run(() => place({ above: last!.pid }))} />
+        <Item icon={<ArrowUpToLine size={14} />} label="Move to the front" keys="moveFront" disabled={!first || first.pid === s.pid} onClick={run(() => moveTo(s, "front"))} />
+        <Item icon={<ArrowDownToLine size={14} />} label="Move to the end" keys="moveEnd" disabled={!last || last.pid === s.pid} onClick={run(() => moveTo(s, "end"))} />
         {!s.terminal && (
           <>
             <Item
               icon={<Copy size={14} />}
               label="Copy resume command"
+              keys="copyResume"
               tip="To continue this conversation in any terminal"
-              onClick={run(() => copy(`cd ${shellQuote(s.cwd)} && ${claudeCommand(s.account)} --resume ${s.sessionId}`, "the resume command"))}
+              onClick={run(() => copyResumeCommand(s))}
             />
-            <Item icon={<Copy size={14} />} label="Copy session ID" onClick={run(() => copy(s.sessionId, "the session ID"))} />
+            <Item icon={<Copy size={14} />} label="Copy session ID" keys="copyId" onClick={run(() => copySessionId(s))} />
           </>
         )}
       </div>
 
       <div className="ctx-group">
-        <Item icon={<X size={14} />} label={s.terminal ? "Close terminal…" : "Close session…"} meta="X" danger onClick={run(() => setState({ closing: s.pid }))} />
+        <Item icon={<X size={14} />} label={s.terminal ? "Close terminal…" : "Close session…"} keys="close" danger onClick={run(() => setState({ closing: s.pid }))} />
       </div>
     </div>,
     document.body,

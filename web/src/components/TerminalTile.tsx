@@ -33,7 +33,7 @@ export function TerminalTile({ s, index, selected }: { s: Session; index: number
         {renaming ? <NameEditor s={s} className="mon-title" onDone={() => setState({ renaming: null })} /> : <h3 className="mon-title">{s.name}</h3>}
         <div className="mon-actions">
           <RenameButton s={s} onClick={() => setState({ renaming: s.pid })} />
-          <IconButton label="Pop out to its own window" onClick={() => popoutSession(s.pid)}>
+          <IconButton label="Pop out to its own window" keys="popout" onClick={() => popoutSession(s.pid)}>
             <PictureInPicture2 size={15} />
           </IconButton>
         </div>

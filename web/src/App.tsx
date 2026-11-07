@@ -12,10 +12,10 @@ import { Toasts } from "./components/Toasts.tsx";
 import { SetupBanner, TopBar } from "./components/TopBar.tsx";
 import { Wall, WallToolbar } from "./components/Wall.tsx";
 import { WorktreesPanel } from "./components/WorktreesPanel.tsx";
-import { type Command, commandOf } from "./lib/keys.ts";
+import { type Command, commandOf, isSessionCommand, sessionKeyOf } from "./lib/keys.ts";
+import { runSessionKey } from "./lib/sessionActions.ts";
 import { clampWidth, dragFrom, type DrawerKind, keepSizes, setDrawerWidth } from "./lib/resize.ts";
-import { act, getState, matchesFilter, openSession, openTerminal, setState, type State, toast, useStore, VIEW } from "./store.ts";
-import { openUrl } from "./components/Monitor.tsx";
+import { getState, matchesFilter, openTerminal, setState, type State, useStore, VIEW } from "./store.ts";
 
 function Drawer({ s }: { s: Session | null }) {
   const kind: DrawerKind = s?.hosted ? "wide" : "plain";
@@ -88,12 +88,6 @@ function byPlace(visible: Session[], pid: number | null, by: 1 | -1): Session | 
   return visible.find((s) => s.pid === found);
 }
 
-function rename(s: Session | undefined): void {
-  if (!s) return;
-  if (s.ide === "vscode" && !s.vscodeLinked) return toast("Renaming a VS Code session needs the VS Code helper (Settings)", "error");
-  setState({ renaming: s.pid });
-}
-
 /** The shortcuts that work everywhere, a console included. */
 function command(cmd: Command, visible: Session[], st: State): void {
   // A close waits for its answer, and the new-session dialog may hold a console that still waits for one.
@@ -105,8 +99,26 @@ function command(cmd: Command, visible: Session[], st: State): void {
   if (cmd.id === "leave") return (document.activeElement as HTMLElement | null)?.blur();
   if (st.panel) return;
   if (cmd.id === "pick") return select(visible[cmd.n - 1]);
-  if (cmd.id === "rename") return rename(visible.find((s) => s.pid === st.selected));
+  if (isSessionCommand(cmd)) {
+    const s = visible.find((x) => x.pid === st.selected);
+    return void (s && runSessionKey(cmd, s));
+  }
   select(step(visible, st.selected, cmd.id === "next" ? 1 : -1));
+}
+
+/**
+ * A session's menu is open: the keys act on its session, as a menu's shortcuts do, and close it. A name being typed in
+ * it, and Enter or Space on the item the arrows reached, stay the menu's own.
+ */
+function menuKey(e: KeyboardEvent, st: State): void {
+  const s = st.snapshot?.sessions.find((x) => x.pid === st.menu?.pid);
+  const target = e.target as HTMLElement;
+  if (!s || target.closest("input") || ((e.key === "Enter" || e.key === " ") && target.closest(".ctx-menu button"))) return;
+  const cmd = commandOf(e);
+  const k = cmd ? (isSessionCommand(cmd) ? cmd : null) : sessionKeyOf(e, true);
+  if (!k) return;
+  e.preventDefault();
+  if (runSessionKey(k, s)) setState({ menu: null });
 }
 
 function useKeyboard(visible: Session[]) {
@@ -115,8 +127,7 @@ function useKeyboard(visible: Session[]) {
       // An open menu took this key already.
       if (e.defaultPrevented) return;
       const st = getState();
-      // A session's menu is open: its keys are for that session, not the selected one.
-      if (st.menu) return;
+      if (st.menu) return menuKey(e, st);
       const cmd = commandOf(e);
       if (cmd) {
         e.preventDefault();
@@ -144,7 +155,7 @@ function useKeyboard(visible: Session[]) {
         e.preventDefault(); // the wall would scroll as well
         return select(byPlace(visible, st.selected, e.key === "ArrowDown" ? 1 : -1));
       }
-      if (e.key === "Home" || e.key === "End") {
+      if ((e.key === "Home" || e.key === "End") && !e.shiftKey) {
         e.preventDefault();
         return select(e.key === "Home" ? visible[0] : visible.at(-1));
       }
@@ -162,20 +173,9 @@ function useKeyboard(visible: Session[]) {
         return;
       }
       const s = visible.find((x) => x.pid === st.selected);
-      if (!s) return;
-      const key = e.key.toLowerCase();
-      if (e.key === "Enter") {
-        e.preventDefault(); // the Enter would otherwise reach the console that opens now
-        openSession(s);
-      }
-      else if (e.key === " ") {
-        e.preventDefault();
-        setState({ drawer: st.drawer === s.pid ? null : s.pid });
-      } else if (e.key === "F2") rename(s);
-      else if (key === "a" && s.activity.kind === "approval") void act(`${s.pid}:approve`, `/api/sessions/${s.pid}/approve`);
-      else if (key === "r" && s.activity.kind === "approval") void act(`${s.pid}:reject`, `/api/sessions/${s.pid}/reject`);
-      else if (key === "p" && s.pr) openUrl(s.pr.url);
-      else if (key === "x") setState({ closing: s.pid });
+      const k = sessionKeyOf(e);
+      // An Enter would otherwise reach the console that opens now, and a Space scroll the wall.
+      if (s && k && runSessionKey(k, s)) e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
