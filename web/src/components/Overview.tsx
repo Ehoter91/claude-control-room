@@ -234,7 +234,7 @@ function UsageCard({ snap }: { snap: Snapshot }) {
           type="button"
           className="btn btn-ghost btn-sm"
           disabled={busy.switch}
-          data-tip="Sign in to Claude Code with another account in your browser"
+          data-tip="Sign in to Claude Code with another account, in a private browser window"
           onClick={() => void act("switch", "/api/account/switch")}
         >
           <RefreshCw size={13} /> Switch account

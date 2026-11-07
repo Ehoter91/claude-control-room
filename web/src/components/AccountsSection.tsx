@@ -56,7 +56,7 @@ export function AccountsSection({ snap }: { snap: Snapshot }) {
                 type="button"
                 className={`btn btn-sm ${a.loggedIn ? "btn-ghost" : "btn-primary"}`}
                 disabled={busy[`account:${a.dir}`]}
-                data-tip={a.loggedIn ? "Sign in with another claude.ai account, in your browser" : "Sign in in your browser"}
+                data-tip={`${a.loggedIn ? "Sign in with another claude.ai account" : "Sign in"}, in a private browser window: your browser's own claude.ai stays as it is`}
                 onClick={() => signIn(a)}
               >
                 {a.loggedIn ? "Switch" : "Sign in"}

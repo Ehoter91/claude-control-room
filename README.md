@@ -141,7 +141,8 @@ It works while Claude is busy too. Only a session that is asking you something m
 ### Two Claude accounts
 
 Keep a personal account next to your work one. Claude Code keeps each login in its own config folder (`CLAUDE_CONFIG_DIR`), and Control Room reads them all.
-Add one in **Settings → Claude accounts**: a name, such as Personal, and a folder, such as `~/.claude-personal`. Click **Sign in** and pick the account in your browser.
+Add one in **Settings → Claude accounts**: a name, such as Personal, and a folder, such as `~/.claude-personal`. Click **Sign in** and pick the account.
+The sign-in opens in a private window (Chrome, Brave, Edge or Firefox, the first one you have), so your browser's own claude.ai stays signed in to your work account.
 
 **New session** then asks which account to use. A session on another account has its name in pink on the tile, in Focus and in its details.
 Sessions you start yourself show up too: `CLAUDE_CONFIG_DIR=~/.claude-personal claude`.
