@@ -18,6 +18,7 @@ import { applyLines, describeTool, emptyState, modelName, readTranscript, userTe
 import { verdictFor, type WorktreeFacts } from "../server/worktrees.ts";
 import { claudeCommand, isEffort, isMode, isModel, modeName, modelAlias } from "../shared/claude.ts";
 import { isIdeId, openTarget, targetName } from "../shared/ides.ts";
+import { commandOf, KEY_GROUPS, KEYS } from "../web/src/lib/keys.ts";
 import { fitWall, TILE_MIN_H, TILE_MIN_W } from "../web/src/lib/layout.ts";
 
 const NOW = 1_800_000_000_000;
@@ -498,5 +499,39 @@ describe("other Claude accounts", () => {
   it("writes the command for another account so it pastes safely", () => {
     expect(claudeCommand(null)).toBe("claude");
     expect(claudeCommand({ dir: "/Users/me/my claude" })).toBe("CLAUDE_CONFIG_DIR='/Users/me/my claude' claude");
+  });
+});
+
+describe("shortcuts", () => {
+  const press = (key: string, mods: { meta?: boolean; ctrl?: boolean; shift?: boolean; alt?: boolean; code?: string } = {}) =>
+    commandOf({ key, code: mods.code ?? "", metaKey: !!mods.meta, ctrlKey: !!mods.ctrl, shiftKey: !!mods.shift, altKey: !!mods.alt } as KeyboardEvent);
+
+  it("knows the ones that work in a console, as PyCharm has them", () => {
+    expect(press("n", { meta: true })).toEqual({ id: "newSession" });
+    expect(press("t", { meta: true })).toEqual({ id: "newTerminal" });
+    expect(press(",", { meta: true })).toEqual({ id: "settings" });
+    expect(press("/", { meta: true })).toEqual({ id: "help" });
+    expect(press("3", { meta: true })).toEqual({ id: "pick", n: 3 });
+    expect(press("}", { meta: true, shift: true, code: "BracketRight" })).toEqual({ id: "next" });
+    expect(press("{", { meta: true, shift: true, code: "BracketLeft" })).toEqual({ id: "prev" });
+    expect(press("Tab", { ctrl: true })).toEqual({ id: "next" });
+    expect(press("Tab", { ctrl: true, shift: true })).toEqual({ id: "prev" });
+    expect(press("F6", { shift: true })).toEqual({ id: "rename" });
+    expect(press("Escape", { shift: true })).toEqual({ id: "leave" });
+  });
+
+  it("leaves the shell and Claude Code their keys", () => {
+    for (const key of ["n", "t", "c", "r", "a"]) expect(press(key, { ctrl: true })).toBeNull(); // ⌃N, ⌃T, ⌃C… mean something there
+    expect(press("c", { meta: true })).toBeNull(); // copy and paste stay the Mac's
+    expect(press("v", { meta: true })).toBeNull();
+    expect(press("Escape")).toBeNull();
+    expect(press("n")).toBeNull(); // a plain letter is typing
+    expect(press("Enter", { shift: true })).toBeNull();
+  });
+
+  it("lists every shortcut in the guide once", () => {
+    const listed = KEY_GROUPS.flatMap((g) => g.ids);
+    expect(new Set(listed).size).toBe(listed.length);
+    expect([...listed].sort()).toEqual(Object.keys(KEYS).sort());
   });
 });

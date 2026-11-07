@@ -2388,10 +2388,31 @@ button.chip:hover {
 }
 .keys {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 18px;
+  gap: 2px;
+  margin: 0;
   color: var(--text-2);
   font-size: 12.5px;
+}
+.keys-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 30px;
+}
+.keys-row dt {
+  min-width: 0;
+}
+.keys-row dd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  flex-shrink: 0;
+}
+.keys-or {
+  color: var(--text-3);
+  font-size: 11px;
 }
 
 /* ---------- toasts ---------- */

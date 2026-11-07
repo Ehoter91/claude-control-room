@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ideName } from "../../../shared/ides.ts";
 import type { ChatLine, Session } from "../../../shared/types.ts";
 import { duration, folderName, money, startedLabel } from "../lib/format.ts";
+import { withKey } from "../lib/keys.ts";
 import { popoutSession } from "../lib/native.ts";
 import { act, api, consoleName, getState, openInIde, setState, useIdeName, useOpenName, useStore } from "../store.ts";
 import { AccountChip, ApprovalCard, NameEditor, openUrl, PrChip, QuestionCard, RemoteButton, RenameButton } from "./Monitor.tsx";
@@ -164,7 +165,7 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
   const a = s.activity;
   const g = s.git;
   const [showClaims, setShowClaims] = useState(false);
-  const [renaming, setRenaming] = useState(false);
+  const renaming = useStore((st) => st.renaming === s.pid);
   const openIn = useOpenName(s);
   const ide = useIdeName();
   const tmuxName = consoleName(s);
@@ -191,14 +192,14 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
         <span className="detail-status-time">· {duration(now - a.since)}</span>
         <AccountChip s={s} />
         {variant === "drawer" && (
-          <button type="button" className="icon-btn detail-close" aria-label="Close details" onClick={() => setState({ drawer: null })}>
+          <button type="button" className="icon-btn detail-close" aria-label="Close details" data-tip={withKey("Close details", "back")} data-tip-side="bottom" onClick={() => setState({ drawer: null })}>
             <X size={16} />
           </button>
         )}
       </div>
       <div className="detail-title-row">
-        {renaming ? <NameEditor s={s} className="detail-title" onDone={() => setRenaming(false)} /> : <h2 className="detail-title">{s.name}</h2>}
-        {!renaming && <RenameButton s={s} onClick={() => setRenaming(true)} />}
+        {renaming ? <NameEditor s={s} className="detail-title" onDone={() => setState({ renaming: null })} /> : <h2 className="detail-title">{s.name}</h2>}
+        {!renaming && <RenameButton s={s} onClick={() => setState({ renaming: s.pid })} />}
       </div>
       {compact ? (
         // A native tip: the line clips anything drawn outside it.
@@ -234,7 +235,7 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
       )}
       {!s.terminal && <RemoteButton s={s} look="button" />}
       {s.pr && (
-        <button type="button" className="btn btn-ghost" onClick={() => openUrl(s.pr!.url)}>
+        <button type="button" className="btn btn-ghost" data-tip={withKey(s.pr.title, "pr")} onClick={() => openUrl(s.pr!.url)}>
           <GitPullRequest size={15} /> PR #{s.pr.number}
         </button>
       )}
@@ -251,7 +252,7 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
           <PictureInPicture2 size={15} />
         </button>
       )}
-      <button type="button" className="btn btn-danger-ghost detail-close-btn" onClick={() => setState({ closing: s.pid })}>
+      <button type="button" className="btn btn-danger-ghost detail-close-btn" data-tip={withKey(s.terminal ? "Close the terminal" : "Close the session", "close")} onClick={() => setState({ closing: s.pid })}>
         <X size={15} /> {s.terminal ? "Close terminal…" : "Close…"}
       </button>
     </div>

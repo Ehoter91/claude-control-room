@@ -3,6 +3,7 @@ import { AnimatePresence, LayoutGroup } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session, Settings } from "../../../shared/types.ts";
 import { useDragOrder } from "../lib/dragOrder.ts";
+import { withKey } from "../lib/keys.ts";
 import { fitWall } from "../lib/layout.ts";
 import { native, openWallWindow, type DisplayInfo } from "../lib/native.ts";
 import { api, matchesFilter, remember, setState, useStore, VIEW, type Filter } from "../store.ts";
@@ -123,13 +124,13 @@ export function WallToolbar({ sessions, layout }: { sessions: Session[]; layout:
       </div>
       <div className="wall-tools">
         <div className="seg" aria-label="Layout">
-          <button type="button" className={`seg-btn ${layout === "fit" ? "is-on" : ""}`} onClick={() => setLayout("fit")} data-tip="Fit every session on screen">
+          <button type="button" className={`seg-btn ${layout === "fit" ? "is-on" : ""}`} onClick={() => setLayout("fit")} data-tip={withKey("Fit every session on screen", "layout")}>
             <LayoutGrid size={14} /> Fit
           </button>
           <button type="button" className={`seg-btn ${layout === "comfortable" ? "is-on" : ""}`} onClick={() => setLayout("comfortable")} data-tip="Large tiles, scroll for more">
             <Rows3 size={14} /> Large
           </button>
-          <button type="button" className={`seg-btn ${layout === "focus" ? "is-on" : ""}`} onClick={() => setLayout("focus")} data-tip="One session big, the rest beside it">
+          <button type="button" className={`seg-btn ${layout === "focus" ? "is-on" : ""}`} onClick={() => setLayout("focus")} data-tip={withKey("One session big, the rest beside it", "layout")}>
             <Columns2 size={14} /> Focus
           </button>
         </div>

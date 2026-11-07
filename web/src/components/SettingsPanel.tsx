@@ -264,17 +264,9 @@ export function SettingsPanel({ snap }: { snap: Snapshot }) {
           </div>
 
           <h4 className="set-section">Keyboard</h4>
-          <div className="keys">
-            <span><kbd className="kbd">1</kbd>–<kbd className="kbd">9</kbd> select a session</span>
-            <span><kbd className="kbd">↵</kbd> open it</span>
-            <span><kbd className="kbd">Space</kbd> details</span>
-            <span><kbd className="kbd">A</kbd> approve · <kbd className="kbd">R</kbd> reject</span>
-            <span><kbd className="kbd">P</kbd> open its PR</span>
-            <span><kbd className="kbd">X</kbd> close session…</span>
-            <span><kbd className="kbd">F</kbd> focus layout</span>
-            <span><kbd className="kbd">T</kbd> new terminal</span>
-            <span><kbd className="kbd">Esc</kbd> close panels</span>
-          </div>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setState({ panel: "keys" })}>
+            Show all shortcuts <kbd className="kbd">⌘/</kbd>
+          </button>
         </div>
       </motion.div>
     </div>

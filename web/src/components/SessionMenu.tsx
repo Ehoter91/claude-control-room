@@ -268,6 +268,7 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
         <Item
           icon={<Pencil size={14} />}
           label={s.vscodeLinked ? "Rename, on its VS Code tab too" : "Rename"}
+          meta="⇧F6"
           tip={needsHelper ? "Renaming a VS Code session needs the VS Code helper (Settings)" : undefined}
           disabled={needsHelper || renaming}
           onClick={() => setRenaming(true)}

@@ -4,6 +4,7 @@ import type { Session } from "../../shared/types.ts";
 import { CloseDialog } from "./components/CloseDialog.tsx";
 import { SessionMenu } from "./components/SessionMenu.tsx";
 import { NewSessionDialog } from "./components/NewSessionDialog.tsx";
+import { KeysPanel } from "./components/KeysPanel.tsx";
 import { Overview } from "./components/Overview.tsx";
 import { SessionDetail } from "./components/SessionDetail.tsx";
 import { SettingsPanel } from "./components/SettingsPanel.tsx";
@@ -11,8 +12,9 @@ import { Toasts } from "./components/Toasts.tsx";
 import { SetupBanner, TopBar } from "./components/TopBar.tsx";
 import { Wall, WallToolbar } from "./components/Wall.tsx";
 import { WorktreesPanel } from "./components/WorktreesPanel.tsx";
+import { type Command, commandOf } from "./lib/keys.ts";
 import { clampWidth, dragFrom, type DrawerKind, keepSizes, setDrawerWidth } from "./lib/resize.ts";
-import { act, getState, matchesFilter, openSession, openTerminal, setState, useStore, VIEW } from "./store.ts";
+import { act, getState, matchesFilter, openSession, openTerminal, setState, type State, toast, useStore, VIEW } from "./store.ts";
 import { openUrl } from "./components/Monitor.tsx";
 
 function Drawer({ s }: { s: Session | null }) {
@@ -54,15 +56,74 @@ function Drawer({ s }: { s: Session | null }) {
 let focusedAt = Date.now();
 window.addEventListener("focus", () => (focusedAt = Date.now()));
 
+/** Moves the pick. Open details follow it, and a console that had the keyboard hands it to the next one's. */
+function select(s: Session | undefined): void {
+  if (!s) return;
+  const typing = !!(document.activeElement as HTMLElement | null)?.closest(".xterm");
+  setState((st) => ({ selected: s.pid, ...(st.drawer !== null && { drawer: s.pid }), ...(typing && s.hosted && { typeInto: s.pid }) }));
+  requestAnimationFrame(() => document.querySelector(`.wall-area [data-pid="${s.pid}"]`)?.scrollIntoView({ block: "nearest" }));
+}
+
+/** One step along the sessions, round from the last to the first, as tabs go. */
+function step(visible: Session[], pid: number | null, by: 1 | -1): Session | undefined {
+  const i = visible.findIndex((s) => s.pid === pid);
+  if (i < 0) return by > 0 ? visible[0] : visible.at(-1);
+  return visible[(i + by + visible.length) % visible.length];
+}
+
+/** The session above or below the picked one, by where its tile sits: a row up or down the grid, or along the list in Focus. */
+function byPlace(visible: Session[], pid: number | null, by: 1 | -1): Session | undefined {
+  const tiles = [...document.querySelectorAll<HTMLElement>(".wall-area [data-pid]")];
+  const at = tiles.find((t) => Number(t.dataset.pid) === pid)?.getBoundingClientRect();
+  if (!at) return visible[0];
+  let best: { pid: number; score: number } | null = null;
+  for (const t of tiles) {
+    const r = t.getBoundingClientRect();
+    const dy = (r.top - at.top) * by;
+    if (dy < at.height / 2) continue; // the same row, or the other way
+    const score = dy * 10_000 + Math.abs(r.left - at.left); // the nearest row first, then the nearest in it
+    if (!best || score < best.score) best = { pid: Number(t.dataset.pid), score };
+  }
+  const found = best?.pid;
+  return visible.find((s) => s.pid === found);
+}
+
+function rename(s: Session | undefined): void {
+  if (!s) return;
+  if (s.ide === "vscode" && !s.vscodeLinked) return toast("Renaming a VS Code session needs the VS Code helper (Settings)", "error");
+  setState({ renaming: s.pid });
+}
+
+/** The shortcuts that work everywhere, a console included. */
+function command(cmd: Command, visible: Session[], st: State): void {
+  // A close waits for its answer, and the new-session dialog may hold a console that still waits for one.
+  if (st.closing || st.panel === "new") return;
+  if (cmd.id === "newSession") return void (!VIEW.wallOnly && setState({ panel: "new" }));
+  if (cmd.id === "newTerminal") return void (!VIEW.wallOnly && openTerminal());
+  if (cmd.id === "settings") return setState({ panel: st.panel === "settings" ? null : "settings" });
+  if (cmd.id === "help") return setState({ panel: st.panel === "keys" ? null : "keys" });
+  if (cmd.id === "leave") return (document.activeElement as HTMLElement | null)?.blur();
+  if (st.panel) return;
+  if (cmd.id === "pick") return select(visible[cmd.n - 1]);
+  if (cmd.id === "rename") return rename(visible.find((s) => s.pid === st.selected));
+  select(step(visible, st.selected, cmd.id === "next" ? 1 : -1));
+}
+
 function useKeyboard(visible: Session[]) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
       // An open menu took this key already.
-      if (e.defaultPrevented || target.closest("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.defaultPrevented) return;
       const st = getState();
       // A session's menu is open: its keys are for that session, not the selected one.
       if (st.menu) return;
+      const cmd = commandOf(e);
+      if (cmd) {
+        e.preventDefault();
+        return command(cmd, visible, st);
+      }
+      const target = e.target as HTMLElement;
+      if (target.closest("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "Escape") {
         // The new-session dialog decides for itself: it may hold a console that still waits for an answer.
         if (st.panel === "new") return;
@@ -73,16 +134,19 @@ function useKeyboard(visible: Session[]) {
       }
       if (!document.hasFocus() || Date.now() - focusedAt < 900) return;
       if (st.closing || st.panel) return;
-      if (/^[1-9]$/.test(e.key)) {
-        const s = visible[Number(e.key) - 1];
-        if (s) setState({ selected: s.pid });
-        return;
-      }
+      if (e.key === "?") return setState({ panel: "keys" });
+      if (/^[1-9]$/.test(e.key)) return select(visible[Number(e.key) - 1]);
       if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-        const i = visible.findIndex((s) => s.pid === st.selected);
-        const next = visible[Math.max(0, Math.min(visible.length - 1, i + (e.key === "ArrowRight" ? 1 : -1)))];
-        if (next) setState({ selected: next.pid });
-        return;
+        e.preventDefault();
+        return select(step(visible, st.selected, e.key === "ArrowRight" ? 1 : -1));
+      }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault(); // the wall would scroll as well
+        return select(byPlace(visible, st.selected, e.key === "ArrowDown" ? 1 : -1));
+      }
+      if (e.key === "Home" || e.key === "End") {
+        e.preventDefault();
+        return select(e.key === "Home" ? visible[0] : visible.at(-1));
       }
       if (e.key.toLowerCase() === "n" && !VIEW.wallOnly) {
         setState({ panel: "new" });
@@ -107,7 +171,8 @@ function useKeyboard(visible: Session[]) {
       else if (e.key === " ") {
         e.preventDefault();
         setState({ drawer: st.drawer === s.pid ? null : s.pid });
-      } else if (key === "a" && s.activity.kind === "approval") void act(`${s.pid}:approve`, `/api/sessions/${s.pid}/approve`);
+      } else if (e.key === "F2") rename(s);
+      else if (key === "a" && s.activity.kind === "approval") void act(`${s.pid}:approve`, `/api/sessions/${s.pid}/approve`);
       else if (key === "r" && s.activity.kind === "approval") void act(`${s.pid}:reject`, `/api/sessions/${s.pid}/reject`);
       else if (key === "p" && s.pr) openUrl(s.pr.url);
       else if (key === "x") setState({ closing: s.pid });
@@ -178,6 +243,7 @@ export function App() {
       {panel === "settings" && <SettingsPanel snap={snap} />}
       {panel === "worktrees" && <WorktreesPanel />}
       {panel === "new" && <NewSessionDialog snap={snap} />}
+      {panel === "keys" && <KeysPanel />}
       <SessionMenu />
       <Toasts />
     </div>
