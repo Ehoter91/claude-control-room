@@ -141,7 +141,9 @@ export function NewSessionDialog({ snap }: { snap: Snapshot }) {
               <label className="field">
                 <span className="field-label">Account</span>
                 <select className="select" value={account} onChange={(e) => setAccount(e.target.value)}>
-                  <option value="">Default · {snap.account.email ?? "not signed in"}</option>
+                  <option value="">
+                    {snap.settings.defaultAccountLabel} · {snap.account.email ?? "not signed in"}
+                  </option>
                   {snap.otherAccounts.map((a) => (
                     <option key={a.dir} value={a.dir}>
                       {a.label} · {a.loggedIn ? (a.email ?? "signed in") : "not signed in"}

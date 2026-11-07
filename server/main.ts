@@ -238,7 +238,13 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
       }
       case "/api/settings": {
         const b = await body<
-          Partial<Settings> & { addShortcutToken?: string; removeShortcutToken?: number; addAccount?: { label?: unknown; dir?: unknown }; removeAccount?: string }
+          Partial<Settings> & {
+            addShortcutToken?: string;
+            removeShortcutToken?: number;
+            addAccount?: { label?: unknown; dir?: unknown };
+            renameAccount?: { label?: unknown; dir?: unknown };
+            removeAccount?: string;
+          }
         >(req);
         const patch: Partial<Settings> = {};
         for (const key of ["notifications", "sounds", "aiSummaries", "includeIdePanel"] as const) {
@@ -281,6 +287,14 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
           message = `Added ${label}${connected ? ", and connected it so its usage shows here" : ""}. Sign in to it next.`;
           // Asking claude takes a few seconds; the account shows meanwhile, signed in or not once known.
           void readAccount({ label, dir }).then(() => monitor.tick());
+        }
+        // An empty name gives the usual account its own name back.
+        if (b.defaultAccountLabel !== undefined) patch.defaultAccountLabel = accountLabel(b.defaultAccountLabel) ?? "Default";
+        if (b.renameAccount) {
+          const label = accountLabel(b.renameAccount.label);
+          if (!label) return send(res, 200, { ok: false, message: "Give the account a name." });
+          if (!settings().accounts.some((a) => a.dir === b.renameAccount!.dir)) return send(res, 200, { ok: false, message: "That account is not in Settings any more." });
+          patch.accounts = settings().accounts.map((a) => (a.dir === b.renameAccount!.dir ? { ...a, label } : a));
         }
         if (typeof b.removeAccount === "string") {
           const gone = settings().accounts.find((a) => a.dir === b.removeAccount);

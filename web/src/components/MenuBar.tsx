@@ -154,7 +154,7 @@ function Usage({ snap }: { snap: Snapshot }) {
       </h4>
       {setup.statusLine === "installed" ? (
         <>
-          {snap.otherAccounts.length > 0 && <div className="mb-use-account">Default</div>}
+          {snap.otherAccounts.length > 0 && <div className="mb-use-account">{snap.settings.defaultAccountLabel}</div>}
           <UseLine label="5-hour" w={usage.fiveHour} now={now} />
           <UseLine label="Week" w={usage.sevenDay} now={now} />
           {snap.otherAccounts

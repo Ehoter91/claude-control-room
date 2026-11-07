@@ -1,9 +1,54 @@
 // Claude accounts besides the usual one, in Settings. Each keeps its own login in its own Claude Code config folder.
-import { UserRound, X } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { Pencil, UserRound, X } from "lucide-react";
+import { type FormEvent, useRef, useState } from "react";
 import { claudeCommand, MAX_ACCOUNTS } from "../../../shared/claude.ts";
 import type { OtherAccount, Snapshot } from "../../../shared/types.ts";
 import { act, useStore } from "../store.ts";
+
+/** An account's name, shown on the filters, its sessions and its usage: click it to change it. */
+function AccountName({ label, onSave }: { label: string; onSave: (label: string) => void }) {
+  const [value, setValue] = useState<string | null>(null);
+  // Enter or Esc ends it, and the blur that follows must not end it again.
+  const ended = useRef(false);
+  if (value === null) {
+    return (
+      <button
+        type="button"
+        className="account-name"
+        data-tip="Rename it"
+        onClick={() => {
+          ended.current = false;
+          setValue(label);
+        }}
+      >
+        <b>{label}</b>
+        <Pencil size={11} />
+      </button>
+    );
+  }
+  const done = (keep: boolean) => {
+    if (ended.current) return;
+    ended.current = true;
+    if (keep && value.trim() !== label) onSave(value.trim());
+    setValue(null);
+  };
+  return (
+    <input
+      className="input account-name-input"
+      autoFocus
+      value={value}
+      maxLength={30}
+      aria-label="Account name"
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") done(true);
+        else if (e.key === "Escape") done(false);
+      }}
+      onBlur={() => done(true)}
+    />
+  );
+}
 
 export function AccountsSection({ snap }: { snap: Snapshot }) {
   const busy = useStore((s) => s.busy);
@@ -23,6 +68,9 @@ export function AccountsSection({ snap }: { snap: Snapshot }) {
   };
   const signIn = (a: OtherAccount) => void act(`account:${a.dir}`, "/api/account/switch", { dir: a.dir });
   const remove = (a: OtherAccount) => void act(`account:${a.dir}`, "/api/settings", { removeAccount: a.dir });
+  // Left empty, the usual account is "Default" again; another one keeps its name.
+  const renameUsual = (label: string) => void act("account-name", "/api/settings", { defaultAccountLabel: label }, true);
+  const rename = (a: OtherAccount, label: string) => label && void act(`account:${a.dir}`, "/api/settings", { renameAccount: { dir: a.dir, label } }, true);
 
   return (
     <>
@@ -39,7 +87,7 @@ export function AccountsSection({ snap }: { snap: Snapshot }) {
           <div className="account-item">
             <UserRound size={15} />
             <div className="account-item-text">
-              <b>Default</b>
+              <AccountName label={snap.settings.defaultAccountLabel} onSave={renameUsual} />
               <span>{snap.account.email ?? "Not signed in"} · ~/.claude</span>
             </div>
           </div>
@@ -47,7 +95,7 @@ export function AccountsSection({ snap }: { snap: Snapshot }) {
             <div key={a.dir} className="account-item">
               <UserRound size={15} className="tone-account" />
               <div className="account-item-text">
-                <b>{a.label}</b>
+                <AccountName label={a.label} onSave={(label) => rename(a, label)} />
                 <span data-tip={a.dir}>
                   {a.loggedIn ? (a.email ?? "Signed in") : "Not signed in"} · {a.dir}
                 </span>

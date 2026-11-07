@@ -487,6 +487,10 @@ describe("other Claude accounts", () => {
     // One folder inside another, or the same in other letters, would mix the two accounts' files.
     expect(cleanAccounts([{ label: "A", dir: "/opt/a" }, { label: "B", dir: "/opt/a/b" }, { label: "C", dir: "/OPT/A" }, { label: "D", dir: "/opt" }])).toEqual([{ label: "A", dir: "/opt/a" }]);
     expect(cleanSettings({}).accounts).toEqual([]);
+    // The usual account's name: "Default" until you give it one.
+    expect(cleanSettings({}).defaultAccountLabel).toBe("Default");
+    expect(cleanSettings({ defaultAccountLabel: "  Work  " }).defaultAccountLabel).toBe("Work");
+    expect(cleanSettings({ defaultAccountLabel: "   " }).defaultAccountLabel).toBe("Default");
   });
 
   it("knows the account of a file by the folder it lies in", () => {

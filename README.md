@@ -149,7 +149,7 @@ To see one account's sessions, pick it next to the filters above the wall, or cl
 Sessions you start yourself show up too: `CLAUDE_CONFIG_DIR=~/.claude-personal claude`.
 The usage card shows each account's limits, once **Connect Claude Code** has added the status line to that account as well.
 **Move here**, **Copy resume command** and the model and effort switches keep each session on its own account.
-Removing an account takes it out of Control Room only. Its folder and login stay.
+Click an account's name in Settings to rename it: call the default one "Work", say. Removing an account takes it out of Control Room only. Its folder and login stay.
 
 ### Names you choose
 

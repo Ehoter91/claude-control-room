@@ -197,6 +197,7 @@ export interface Settings {
   layout: "fit" | "comfortable" | "focus";
   shortcutTokens: string[]; // masked when sent to the UI
   accounts: AccountRef[]; // Claude accounts besides the one in ~/.claude
+  defaultAccountLabel: string; // the name of that one here: "Default" until you give it another, such as "Work"
 }
 
 export interface Snapshot {
