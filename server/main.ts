@@ -42,7 +42,7 @@ import { noteUsed } from "./order.ts";
 import { APP_DIR, BRIDGE_FILE, TAP_DIR } from "./paths.ts";
 import { readPower, setSleepDisabled, sudoersLine } from "./power.ts";
 import { forgetStories, testToken } from "./shortcut.ts";
-import { disconnectHome, installStatusLine, uninstallStatusLine } from "./statusline.ts";
+import { connectLikeUsual, disconnectHome, installStatusLine, uninstallStatusLine } from "./statusline.ts";
 import { installHelper, openStream, resolveResult, updateWindow } from "./vscode.ts";
 import { buildReport, insidePath, prsByBranch, scanRepo, type ScanJob } from "./worktrees.ts";
 
@@ -277,7 +277,8 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
           // Claude Code keeps a login in it, so only you may read it.
           await mkdir(dir, { recursive: true, mode: 0o700 });
           patch.accounts = [...accounts, { label, dir }];
-          message = `Added ${label}. Sign in to it next.`;
+          const connected = await connectLikeUsual({ account: { label, dir }, dir });
+          message = `Added ${label}${connected ? ", and connected it so its usage shows here" : ""}. Sign in to it next.`;
           // Asking claude takes a few seconds; the account shows meanwhile, signed in or not once known.
           void readAccount({ label, dir }).then(() => monitor.tick());
         }

@@ -308,6 +308,21 @@ describe("other Claude accounts", () => {
     }
   });
 
+  it("connects an account added later once the usual one is connected, and not before", async () => {
+    const { installStatusLine, uninstallStatusLine, connectLikeUsual, statusLineState } = await import("../server/statusline.ts");
+    const later = { account: { label: "Later", dir: join(home, ".claude-later") }, dir: join(home, ".claude-later") };
+    writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({ theme: "dark" }));
+    expect(await connectLikeUsual(later)).toBe(false);
+    expect(existsSync(join(later.dir, "settings.json"))).toBe(false);
+    await installStatusLine();
+    try {
+      expect(await connectLikeUsual(later)).toBe(true);
+      expect(await statusLineState(later.dir)).toEqual({ statusLine: "installed", hooks: true });
+    } finally {
+      await uninstallStatusLine();
+    }
+  });
+
   it("puts back an account's defaults even when it had no settings file before", async () => {
     const { keepDefaults } = await import("../server/statusline.ts");
     const fresh = join(home, ".claude-fresh");

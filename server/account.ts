@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { Account, AccountRef } from "../shared/types.ts";
 import { claudeEnv } from "./homes.ts";
 import { settings } from "./config.ts";
+import { connectLikeUsual } from "./statusline.ts";
 import { APP_DIR, HOME } from "./paths.ts";
 import { launch, run, sleep } from "./proc.ts";
 
@@ -130,6 +131,7 @@ export async function startAccountSwitch(ref: AccountRef | null = null): Promise
       clearTimeout(timer);
       state.done = true;
       void readAccount(ref);
+      if (code === 0 && ref) void connectLikeUsual({ account: ref, dir: ref.dir });
       answer(code === 0, code === 0 ? `Signed in${which}.` : "The sign-in did not finish.");
     });
     void waitForLink(file, 15_000).then(async (url) => {
