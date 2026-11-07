@@ -1,4 +1,5 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -8,6 +9,7 @@ import { homeOf, homes } from "../server/homes.ts";
 import { parseRemote, parseShortstat } from "../server/git.ts";
 import { chosenIde, ideOf, openInIde } from "../server/ide.ts";
 import { cleanName, MAX_NAME, pickName, tabName, type NameParts } from "../server/names.ts";
+import { BROWSER_BODY, signInUrl } from "../server/account.ts";
 import { etimeSeconds, loginAgeFrom } from "../server/proc.ts";
 import { bridgeIdOf, CLEAR_DRAFT, REMOTE_COMMAND, remoteRefusal, remoteUrl } from "../server/remote.ts";
 import { openSince, type PrRow, summarizeChecks } from "../server/github.ts";
@@ -556,5 +558,20 @@ describe("shortcuts", () => {
     const listed = KEY_GROUPS.flatMap((g) => g.ids);
     expect(new Set(listed).size).toBe(listed.length);
     expect([...listed].sort()).toEqual(Object.keys(KEYS).sort());
+  });
+});
+
+describe("signing in", () => {
+  it("takes the sign-in link out of what claude prints, without the escape codes around it", () => {
+    const link = "https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=x_y-z";
+    const printed = `Opening browser to sign in…\nIf the browser didn't open, visit: \x1b]8;;${link}\x1b\\${link}\x1b]8;;\x1b\\\nPaste code here if prompted >`;
+    expect(signInUrl(printed)).toBe(link);
+    expect(signInUrl("visit https://example.com/oauth?x=1")).toBeNull();
+    // What the CLI hands its browser comes back here whole: the link whose sign-in returns to it by itself.
+    const file = join(mkdtempSync(join(tmpdir(), "cr-signin-")), "link.url");
+    const back = "https://claude.com/cai/oauth/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A54321%2Fcallback&state=a b";
+    execFileSync("/bin/sh", ["-c", BROWSER_BODY, "sh", back], { env: { CONTROL_ROOM_SIGNIN: file } });
+    expect(readFileSync(file, "utf8")).toBe(`${back}\n`);
+    expect(signInUrl("nothing here")).toBeNull();
   });
 });
