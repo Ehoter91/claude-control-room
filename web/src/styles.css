@@ -3968,3 +3968,30 @@ body.is-resizing .drawer {
   border-color: var(--line-2);
   background: rgba(255, 255, 255, 0.09);
 }
+.account-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  cursor: text;
+}
+.account-name svg {
+  color: var(--text-3);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.account-name:hover svg,
+.account-name:focus-visible svg {
+  opacity: 1;
+}
+.account-name-input {
+  height: 26px;
+  max-width: 220px;
+  padding: 0 8px;
+  font-size: 13px;
+}

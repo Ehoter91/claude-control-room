@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS: Settings = {
   layout: "fit",
   shortcutTokens: [],
   accounts: [],
+  defaultAccountLabel: "Default",
 };
 
 let current: Settings = { ...DEFAULT_SETTINGS };
@@ -27,6 +28,7 @@ export function cleanSettings(raw: Partial<Settings>): Settings {
   const s = { ...DEFAULT_SETTINGS, ...raw };
   if (!isIdeId(s.ide)) s.ide = DEFAULT_SETTINGS.ide;
   s.accounts = cleanAccounts(s.accounts);
+  s.defaultAccountLabel = accountLabel(s.defaultAccountLabel) ?? DEFAULT_SETTINGS.defaultAccountLabel;
   return s;
 }
 

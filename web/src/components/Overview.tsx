@@ -248,7 +248,7 @@ function UsageCard({ snap }: { snap: Snapshot }) {
       </h3>
       {setup.statusLine === "installed" && otherAccounts.length > 0 ? (
         <>
-          <AccountUsage label="Default" email={account.email} plan={account.plan} usage={usage} connected now={now} />
+          <AccountUsage label={snap.settings.defaultAccountLabel} email={account.email} plan={account.plan} usage={usage} connected now={now} />
           {otherAccounts.map((a) => (
             <AccountUsage key={a.dir} label={a.label} email={a.loggedIn ? a.email : null} plan={a.plan} usage={a.usage} connected={a.connected} now={now} />
           ))}

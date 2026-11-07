@@ -481,6 +481,7 @@ export function demoSnapshot(now: number, count = DEMO_DEFAULT_COUNT): Snapshot 
       layout: "fit",
       shortcutTokens: ["••••8c2f"],
       accounts: [PERSONAL],
+      defaultAccountLabel: "Work",
     },
   };
 }

@@ -197,7 +197,8 @@ export function needsYou(s: Session): boolean {
 /** The accounts to filter by, once there is more than one: the usual one first. */
 export function accountChoices(snap: Snapshot | null): { id: string; label: string }[] {
   const others = snap?.otherAccounts ?? [];
-  return others.length ? [{ id: "default", label: "Default" }, ...others.map((a) => ({ id: a.dir, label: a.label }))] : [];
+  const usual = snap?.settings.defaultAccountLabel ?? "Default";
+  return others.length ? [{ id: "default", label: usual }, ...others.map((a) => ({ id: a.dir, label: a.label }))] : [];
 }
 
 /** The account filter in force: none once that account, or every other one, is gone from Settings. */
