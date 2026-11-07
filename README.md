@@ -330,7 +330,8 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 
 <br>
 
-Press `⌘/` or `?` to see them all in the app. Hover a button to see its shortcut. The `⌘` ones follow PyCharm and work while you type in a console too.
+Press `⌘/` or `?` to see them all in the app. Hover a button, or right-click a session, to see each shortcut. The `⌘` and F-key ones follow PyCharm and work while you type in a console too.
+In a session's right-click menu, the keys act on that session, and `1` – `4` pick an answer to its question.
 
 | Key | Action |
 |---|---|
@@ -349,6 +350,12 @@ Press `⌘/` or `?` to see them all in the app. Hover a button to see its shortc
 | `A` / `R` | Approve or reject |
 | `P` | Open its pull request |
 | `X` | Close the session |
+| `O` | Open its folder in your IDE |
+| `⇧F4` | Pop it out to its own window |
+| `C` | Continue it on your phone |
+| `⌥⌘R` | Show its folder in Finder |
+| `⇧Home` / `⇧End` | Move it to the front or the end |
+| `⌘⇧C` / `⌥⌘⇧C` | Copy its resume command or its session ID |
 | `F` | Switch between Focus and Fit |
 | `Esc` | Close panels |
 

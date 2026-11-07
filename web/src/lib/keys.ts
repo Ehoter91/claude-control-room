@@ -1,5 +1,6 @@
-// Every shortcut, written once: the keyboard handler, the tips and the Keyboard shortcuts panel all read it. The ⌘ ones
-// follow PyCharm and the Mac, and work while a console has the keyboard; the single keys work everywhere else.
+// Every shortcut, written once: the keyboard handler, the tips, the session menu and the Keyboard shortcuts panel all
+// read it. The ⌘ and F-key ones follow PyCharm and the Mac, and work while a console has the keyboard; the single keys
+// work everywhere else. In a session's menu, the keys act on that session.
 
 export const KEYS = {
   newSession: { keys: ["⌘N", "N"], label: "New session" },
@@ -19,9 +20,18 @@ export const KEYS = {
   rename: { keys: ["⇧F6", "F2"], label: "Rename it" },
   approve: { keys: ["A"], label: "Approve what it asks" },
   reject: { keys: ["R"], label: "Reject what it asks" },
+  answer: { keys: ["1–4"], label: "Pick that answer, in its menu" },
   pr: { keys: ["P"], label: "Open its PR" },
   close: { keys: ["X"], label: "Close it…" },
-  back: { keys: ["Esc"], label: "Close a panel, the details or a full console" },
+  back: { keys: ["Esc"], label: "Close a menu, a panel, the details or a full console" },
+  ide: { keys: ["O"], label: "Open its folder in your IDE" },
+  popout: { keys: ["⇧F4"], label: "Pop it out to its own window" },
+  remote: { keys: ["C"], label: "Continue it on your phone" },
+  finder: { keys: ["⌥⌘R"], label: "Show its folder in Finder" },
+  moveFront: { keys: ["⇧Home"], label: "Move it to the front" },
+  moveEnd: { keys: ["⇧End"], label: "Move it to the end" },
+  copyResume: { keys: ["⌘⇧C"], label: "Copy its resume command" },
+  copyId: { keys: ["⌥⌘⇧C"], label: "Copy its session ID" },
 } as const satisfies Record<string, { keys: readonly string[]; label: string }>;
 
 export type KeyId = keyof typeof KEYS;
@@ -29,7 +39,8 @@ export type KeyId = keyof typeof KEYS;
 export const KEY_GROUPS: { title: string; ids: KeyId[] }[] = [
   { title: "Start", ids: ["newSession", "newTerminal", "settings", "help", "layout"] },
   { title: "Move between sessions", ids: ["next", "prev", "below", "above", "ends", "pick"] },
-  { title: "The selected session", ids: ["open", "leave", "details", "rename", "approve", "reject", "pr", "close", "back"] },
+  { title: "The selected session", ids: ["open", "leave", "details", "rename", "approve", "reject", "answer", "pr", "close", "back"] },
+  { title: "More for it", ids: ["ide", "popout", "remote", "finder", "moveFront", "moveEnd", "copyResume", "copyId"] },
 ];
 
 /** A tip with its shortcut after it, the way a Mac menu shows one: "New session (⌘N)". */
@@ -37,23 +48,66 @@ export function withKey(label: string, id: KeyId): string {
   return `${label} (${KEYS[id].keys[0]})`;
 }
 
-export type Command = { id: "newSession" | "newTerminal" | "settings" | "help" | "next" | "prev" | "rename" | "leave" } | { id: "pick"; n: number };
+/** What a key does to one session: the selected one, or the one whose menu is open. */
+export type SessionKey =
+  | { id: "open" | "details" | "rename" | "approve" | "reject" | "pr" | "close" | "ide" | "popout" | "remote" | "finder" | "moveFront" | "moveEnd" | "copyResume" | "copyId" }
+  | { id: "answer"; n: number };
+
+type SessionCommand = { id: "rename" | "popout" | "finder" | "copyResume" | "copyId" };
+
+export type Command = { id: "newSession" | "newTerminal" | "settings" | "help" | "next" | "prev" | "leave" } | { id: "pick"; n: number } | SessionCommand;
 
 /**
  * The shortcut a key press is, of those that work everywhere: in a console, too, where every other key goes to the
  * session. None of them means anything to a shell or to Claude Code.
  */
 export function commandOf(e: KeyboardEvent): Command | null {
+  // ⌥ turns letters into other characters on a Mac, so these go by the key's place.
+  if (e.metaKey && e.altKey && !e.ctrlKey) {
+    if (e.code === "KeyR" && !e.shiftKey) return { id: "finder" };
+    if (e.code === "KeyC" && e.shiftKey) return { id: "copyId" };
+    return null;
+  }
   if (e.altKey) return null;
   if (e.ctrlKey && !e.metaKey && e.key === "Tab") return { id: e.shiftKey ? "prev" : "next" };
   if (e.ctrlKey) return null;
   if (!e.metaKey) {
     if (e.shiftKey && e.key === "F6") return { id: "rename" };
+    if (e.shiftKey && e.key === "F4") return { id: "popout" };
     if (e.shiftKey && e.key === "Escape") return { id: "leave" };
     return null;
   }
-  if (e.shiftKey) return e.code === "BracketRight" ? { id: "next" } : e.code === "BracketLeft" ? { id: "prev" } : null;
+  if (e.shiftKey) {
+    if (e.code === "BracketRight") return { id: "next" };
+    if (e.code === "BracketLeft") return { id: "prev" };
+    if (e.code === "KeyC") return { id: "copyResume" };
+    return null;
+  }
   if (/^[1-9]$/.test(e.key)) return { id: "pick", n: Number(e.key) };
   const key = e.key.toLowerCase();
   return key === "n" ? { id: "newSession" } : key === "t" ? { id: "newTerminal" } : key === "," ? { id: "settings" } : key === "/" ? { id: "help" } : null;
 }
+
+const SESSION_COMMANDS: readonly string[] = ["rename", "popout", "finder", "copyResume", "copyId"];
+
+/** A command that acts on one session. */
+export function isSessionCommand(c: Command): c is SessionCommand {
+  return SESSION_COMMANDS.includes(c.id);
+}
+
+/**
+ * The single key for something to do to a session, outside a console and a text box. `inMenu`: the keys 1 to 4 pick an
+ * answer there, as its numbers show, instead of a session.
+ */
+export function sessionKeyOf(e: KeyboardEvent, inMenu = false): SessionKey | null {
+  if (e.metaKey || e.ctrlKey || e.altKey) return null;
+  if (e.shiftKey) return e.key === "Home" ? { id: "moveFront" } : e.key === "End" ? { id: "moveEnd" } : null;
+  if (inMenu && /^[1-4]$/.test(e.key)) return { id: "answer", n: Number(e.key) };
+  if (e.key === "Enter") return { id: "open" };
+  if (e.key === " ") return { id: "details" };
+  if (e.key === "F2") return { id: "rename" };
+  const id = LETTERS[e.key.toLowerCase()];
+  return id ? { id } : null;
+}
+
+const LETTERS: Record<string, Exclude<SessionKey, { id: "answer" }>["id"]> = { a: "approve", r: "reject", p: "pr", x: "close", o: "ide", c: "remote" };

@@ -214,7 +214,7 @@ export function RemoteButton({ s, look = "pill" }: { s: Session; look?: "pill" |
     ? "On your phone: it is in the Claude app under Code. Click to open it at claude.ai"
     : asking
       ? "Answer the session first, then send it to your phone"
-      : "Remote control: continue this session on your phone";
+      : withKey("Remote control: continue this session on your phone", "remote");
   const click = (e: MouseEvent) => {
     e.stopPropagation();
     if (s.remoteUrl) openUrl(s.remoteUrl);
@@ -340,7 +340,7 @@ export function Monitor({ s, index, selected }: { s: Session; index: number; sel
           <IconButton label={`Open in ${openIn}`} keys="open" onClick={() => openSession(s)}>
             <CodeXml size={15} />
           </IconButton>
-          <IconButton label="Pop out to its own window" onClick={() => popoutSession(s.pid)}>
+          <IconButton label="Pop out to its own window" keys="popout" onClick={() => popoutSession(s.pid)}>
             <PictureInPicture2 size={15} />
           </IconButton>
         </div>

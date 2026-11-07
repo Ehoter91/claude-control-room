@@ -3619,7 +3619,9 @@ body.is-resizing .drawer {
 }
 .ctx-meta {
   color: var(--text-3);
-  font: 500 11.5px/1 var(--font-mono, ui-monospace, monospace);
+  /* The usual font: in a monospaced one, the O key reads as a zero. */
+  font: 500 12px/1 var(--font);
+  letter-spacing: 0.02em;
 }
 .ctx-item.is-danger,
 .ctx-item.is-danger .ctx-icon {

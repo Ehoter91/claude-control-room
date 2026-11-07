@@ -18,7 +18,7 @@ import { applyLines, describeTool, emptyState, modelName, readTranscript, userTe
 import { verdictFor, type WorktreeFacts } from "../server/worktrees.ts";
 import { claudeCommand, isEffort, isMode, isModel, modeName, modelAlias } from "../shared/claude.ts";
 import { isIdeId, openTarget, targetName } from "../shared/ides.ts";
-import { commandOf, KEY_GROUPS, KEYS } from "../web/src/lib/keys.ts";
+import { commandOf, KEY_GROUPS, KEYS, sessionKeyOf } from "../web/src/lib/keys.ts";
 import { fitWall, TILE_MIN_H, TILE_MIN_W } from "../web/src/lib/layout.ts";
 
 const NOW = 1_800_000_000_000;
@@ -518,6 +518,29 @@ describe("shortcuts", () => {
     expect(press("Tab", { ctrl: true, shift: true })).toEqual({ id: "prev" });
     expect(press("F6", { shift: true })).toEqual({ id: "rename" });
     expect(press("Escape", { shift: true })).toEqual({ id: "leave" });
+    expect(press("F4", { shift: true })).toEqual({ id: "popout" });
+    // ⌥ changes the letter a key types, so these go by the key itself.
+    expect(press("®", { meta: true, alt: true, code: "KeyR" })).toEqual({ id: "finder" });
+    expect(press("C", { meta: true, shift: true, code: "KeyC" })).toEqual({ id: "copyResume" });
+    expect(press("Ç", { meta: true, alt: true, shift: true, code: "KeyC" })).toEqual({ id: "copyId" });
+    expect(press("ç", { alt: true, code: "KeyC" })).toBeNull();
+  });
+
+  it("knows the single keys for a session, and the answer numbers only in its menu", () => {
+    const key = (k: string, mods: { shift?: boolean; meta?: boolean } = {}, inMenu = false) =>
+      sessionKeyOf({ key: k, metaKey: !!mods.meta, ctrlKey: false, altKey: false, shiftKey: !!mods.shift } as KeyboardEvent, inMenu);
+    expect(key("Enter")).toEqual({ id: "open" });
+    expect(key(" ")).toEqual({ id: "details" });
+    expect(key("o")).toEqual({ id: "ide" });
+    expect(key("c")).toEqual({ id: "remote" });
+    expect(key("x")).toEqual({ id: "close" });
+    expect(key("F2")).toEqual({ id: "rename" });
+    expect(key("Home", { shift: true })).toEqual({ id: "moveFront" });
+    expect(key("End", { shift: true })).toEqual({ id: "moveEnd" });
+    expect(key("Home")).toBeNull(); // that one picks the first session
+    expect(key("3", {}, true)).toEqual({ id: "answer", n: 3 });
+    expect(key("3")).toBeNull();
+    expect(key("o", { meta: true })).toBeNull();
   });
 
   it("leaves the shell and Claude Code their keys", () => {
