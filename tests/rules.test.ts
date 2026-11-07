@@ -514,8 +514,11 @@ describe("shortcuts", () => {
     expect(press(",", { meta: true })).toEqual({ id: "settings" });
     expect(press("/", { meta: true })).toEqual({ id: "help" });
     expect(press("3", { meta: true })).toEqual({ id: "pick", n: 3 });
-    expect(press("}", { meta: true, shift: true, code: "BracketRight" })).toEqual({ id: "next" });
-    expect(press("{", { meta: true, shift: true, code: "BracketLeft" })).toEqual({ id: "prev" });
+    expect(press("ArrowDown", { meta: true })).toEqual({ id: "next" });
+    expect(press("ArrowUp", { meta: true })).toEqual({ id: "prev" });
+    expect(press("k", { meta: true })).toEqual({ id: "jump" });
+    expect(press("e", { meta: true })).toEqual({ id: "jump" });
+    expect(press("ArrowDown")).toBeNull(); // a plain arrow is the console's, and Claude Code's
     expect(press("Tab", { ctrl: true })).toEqual({ id: "next" });
     expect(press("Tab", { ctrl: true, shift: true })).toEqual({ id: "prev" });
     expect(press("F6", { shift: true })).toEqual({ id: "rename" });

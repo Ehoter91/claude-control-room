@@ -4,7 +4,7 @@ import { ideName, openTarget, targetName } from "../../shared/ides.ts";
 import type { ActionResult, Session, Snapshot, StatusKind } from "../../shared/types.ts";
 
 export type Filter = "all" | "attention" | "working" | "idle" | "inactive";
-export type Panel = "settings" | "worktrees" | "new" | "keys" | null;
+export type Panel = "settings" | "worktrees" | "new" | "keys" | "jump" | null;
 
 export interface Toast {
   id: number;
@@ -20,6 +20,7 @@ export interface State {
   closing: number | null; // pid in the close dialog
   panel: Panel;
   filter: Filter;
+  accountFilter: string; // whose sessions show: "" every account's, "default" the usual one's, else another's folder
   overviewCollapsed: boolean;
   toasts: Toast[];
   busy: Record<string, boolean>; // "pid:action" while a request runs
@@ -66,6 +67,7 @@ let state: State = {
   closing: null,
   panel: null,
   filter: stored<Filter>("cr.filter", "all"),
+  accountFilter: stored("cr.accountFilter", ""),
   overviewCollapsed: VIEW.wallOnly || stored("cr.overviewCollapsed", false),
   toasts: [],
   busy: {},
@@ -190,6 +192,27 @@ export const ATTENTION: StatusKind[] = ["approval", "question", "waiting"];
 
 export function needsYou(s: Session): boolean {
   return ATTENTION.includes(s.activity.kind) || (s.activity.kind === "idle" && s.activity.askedYou);
+}
+
+/** The accounts to filter by, once there is more than one: the usual one first. */
+export function accountChoices(snap: Snapshot | null): { id: string; label: string }[] {
+  const others = snap?.otherAccounts ?? [];
+  return others.length ? [{ id: "default", label: "Default" }, ...others.map((a) => ({ id: a.dir, label: a.label }))] : [];
+}
+
+/** The account filter in force: none once that account, or every other one, is gone from Settings. */
+export function accountFilterOf(st: State): string {
+  return accountChoices(st.snapshot).some((c) => c.id === st.accountFilter) ? st.accountFilter : "";
+}
+
+export function setAccountFilter(id: string): void {
+  setState({ accountFilter: id });
+  remember("cr.accountFilter", id);
+}
+
+/** "default" is every session not on another account: a terminal too. */
+export function matchesAccount(s: Session, account: string): boolean {
+  return !account || (account === "default" ? !s.account : s.account?.dir === account);
 }
 
 export function matchesFilter(s: Session, f: Filter): boolean {

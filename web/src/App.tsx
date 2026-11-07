@@ -5,6 +5,7 @@ import { CloseDialog } from "./components/CloseDialog.tsx";
 import { SessionMenu } from "./components/SessionMenu.tsx";
 import { NewSessionDialog } from "./components/NewSessionDialog.tsx";
 import { KeysPanel } from "./components/KeysPanel.tsx";
+import { SessionJump } from "./components/SessionJump.tsx";
 import { Overview } from "./components/Overview.tsx";
 import { SessionDetail } from "./components/SessionDetail.tsx";
 import { SettingsPanel } from "./components/SettingsPanel.tsx";
@@ -15,7 +16,7 @@ import { WorktreesPanel } from "./components/WorktreesPanel.tsx";
 import { type Command, commandOf, isSessionCommand, sessionKeyOf } from "./lib/keys.ts";
 import { runSessionKey } from "./lib/sessionActions.ts";
 import { clampWidth, dragFrom, type DrawerKind, keepSizes, setDrawerWidth } from "./lib/resize.ts";
-import { getState, matchesFilter, openTerminal, setState, type State, useStore, VIEW } from "./store.ts";
+import { accountFilterOf, getState, matchesAccount, matchesFilter, openTerminal, setState, type State, useStore, VIEW } from "./store.ts";
 
 function Drawer({ s }: { s: Session | null }) {
   const kind: DrawerKind = s?.hosted ? "wide" : "plain";
@@ -96,6 +97,7 @@ function command(cmd: Command, visible: Session[], st: State): void {
   if (cmd.id === "newTerminal") return void (!VIEW.wallOnly && openTerminal());
   if (cmd.id === "settings") return setState({ panel: st.panel === "settings" ? null : "settings" });
   if (cmd.id === "help") return setState({ panel: st.panel === "keys" ? null : "keys" });
+  if (cmd.id === "jump") return setState({ panel: st.panel === "jump" ? null : "jump" });
   if (cmd.id === "leave") return (document.activeElement as HTMLElement | null)?.blur();
   if (st.panel) return;
   if (cmd.id === "pick") return select(visible[cmd.n - 1]);
@@ -128,12 +130,14 @@ function useKeyboard(visible: Session[]) {
       if (e.defaultPrevented) return;
       const st = getState();
       if (st.menu) return menuKey(e, st);
+      const target = e.target as HTMLElement;
       const cmd = commandOf(e);
-      if (cmd) {
+      // In a text box, ⌘↑ and ⌘↓ move its cursor, as always. The console's hidden box is not one of those.
+      const caret = e.metaKey && (cmd?.id === "next" || cmd?.id === "prev") && !!target.closest("input, textarea") && !target.closest(".xterm");
+      if (cmd && !caret) {
         e.preventDefault();
         return command(cmd, visible, st);
       }
-      const target = e.target as HTMLElement;
       if (target.closest("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "Escape") {
         // The new-session dialog decides for itself: it may hold a console that still waits for an answer.
@@ -222,7 +226,8 @@ export function App() {
   const drawer = useStore((s) => s.drawer);
   const closing = useStore((s) => s.closing);
   const panel = useStore((s) => s.panel);
-  const visible = (snap?.sessions ?? []).filter((s) => matchesFilter(s, filter));
+  const account = useStore(accountFilterOf);
+  const visible = (snap?.sessions ?? []).filter((s) => matchesAccount(s, account) && matchesFilter(s, filter));
   useKeyboard(visible);
 
   if (VIEW.sessionPid !== null) return <SessionWindow pid={VIEW.sessionPid} />;
@@ -244,6 +249,7 @@ export function App() {
       {panel === "worktrees" && <WorktreesPanel />}
       {panel === "new" && <NewSessionDialog snap={snap} />}
       {panel === "keys" && <KeysPanel />}
+      {panel === "jump" && <SessionJump />}
       <SessionMenu />
       <Toasts />
     </div>

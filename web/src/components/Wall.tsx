@@ -6,7 +6,19 @@ import { useDragOrder } from "../lib/dragOrder.ts";
 import { withKey } from "../lib/keys.ts";
 import { fitWall } from "../lib/layout.ts";
 import { native, openWallWindow, type DisplayInfo } from "../lib/native.ts";
-import { api, matchesFilter, remember, setState, useStore, VIEW, type Filter } from "../store.ts";
+import {
+  accountChoices,
+  accountFilterOf,
+  api,
+  matchesAccount,
+  matchesFilter,
+  remember,
+  setAccountFilter,
+  setState,
+  useStore,
+  VIEW,
+  type Filter,
+} from "../store.ts";
 import { Monitor } from "./Monitor.tsx";
 import { FocusView } from "./FocusView.tsx";
 import { TerminalTile } from "./TerminalTile.tsx";
@@ -90,7 +102,11 @@ function WallButton() {
 
 export function WallToolbar({ sessions, layout }: { sessions: Session[]; layout: Settings["layout"] }) {
   const filter = useStore((s) => s.filter);
-  const count = (f: Filter) => sessions.filter((s) => matchesFilter(s, f)).length;
+  const account = useStore(accountFilterOf);
+  // A selector must give the same value back each time, so the list is made from the snapshot here.
+  const choices = accountChoices(useStore((s) => s.snapshot));
+  // The counts are of the account on show.
+  const count = (f: Filter) => sessions.filter((s) => matchesAccount(s, account) && matchesFilter(s, f)).length;
   const setLayout = (l: Settings["layout"]) => void api("/api/settings", { layout: l });
   return (
     <div className="wall-bar">
@@ -122,6 +138,24 @@ export function WallToolbar({ sessions, layout }: { sessions: Session[]; layout:
           );
         })}
       </div>
+      {choices.length > 0 && (
+        <div className="seg" role="tablist" aria-label="Accounts">
+          {[{ id: "", label: "All accounts" }, ...choices].map((c) => (
+            <button
+              key={c.id || "all"}
+              type="button"
+              role="tab"
+              aria-selected={account === c.id}
+              className={`seg-btn ${account === c.id ? "is-on" : ""} ${c.id && c.id !== "default" ? "is-account" : ""}`}
+              data-tip={c.id === "default" ? "Every session that is not on another account" : undefined}
+              onClick={() => setAccountFilter(c.id)}
+            >
+              {c.label}
+              <span className="seg-count">{sessions.filter((s) => matchesAccount(s, c.id)).length}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="wall-tools">
         <div className="seg" aria-label="Layout">
           <button type="button" className={`seg-btn ${layout === "fit" ? "is-on" : ""}`} onClick={() => setLayout("fit")} data-tip={withKey("Fit every session on screen", "layout")}>
@@ -142,8 +176,9 @@ export function WallToolbar({ sessions, layout }: { sessions: Session[]; layout:
 
 export function Wall({ sessions, layout }: { sessions: Session[]; layout: Settings["layout"] }) {
   const filter = useStore((s) => s.filter);
+  const account = useStore(accountFilterOf);
   const selected = useStore((s) => s.selected);
-  const shown = sessions.filter((s) => matchesFilter(s, filter));
+  const shown = sessions.filter((s) => matchesAccount(s, account) && matchesFilter(s, filter));
   const [boxRef, box] = useBox<HTMLDivElement>();
   const dragRef = useDragOrder(shown, ".monitor", "x");
   const ref = useCallback(
