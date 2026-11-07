@@ -174,6 +174,7 @@ function UsageLine({ label, w, now }: { label: string; w: RateWindow | null; now
 
 /** One account's limits, under its name, when there is more than one account. */
 function AccountUsage(props: { label: string; email: string | null; plan: string | null; usage: Usage; connected: boolean; now: number }) {
+  const busy = useStore((s) => s.busy.statusline);
   return (
     <>
       <div className="usage-account">
@@ -187,8 +188,18 @@ function AccountUsage(props: { label: string; email: string | null; plan: string
           <UsageLine label="Week" w={props.usage.sevenDay} now={props.now} />
         </>
       ) : (
-        <div className="usage-line">
-          <span className="muted">Not connected yet: Connect in Settings adds it</span>
+        // Signed in or not, its usage reaches here only through Control Room's status line in its own settings.
+        <div className="usage-connect">
+          <span className="muted">Usage not reported yet</span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={busy}
+            data-tip="Adds Control Room's status line to this account's settings, so its usage shows here. They are backed up first."
+            onClick={() => void act("statusline", "/api/setup/statusline", { install: true })}
+          >
+            Connect
+          </button>
         </div>
       )}
     </>

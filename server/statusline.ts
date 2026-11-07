@@ -211,6 +211,16 @@ async function connectHome(h: Home): Promise<{ changed: boolean; backup: string 
   return { changed: true, backup };
 }
 
+/** An account added or signed in later is connected too, once the usual one is: you asked for that once already. */
+export async function connectLikeUsual(h: Home): Promise<boolean> {
+  const usual = await statusLineState();
+  if (usual.statusLine !== "installed" || !usual.hooks) return false;
+  return connectHome(h).then(
+    () => true,
+    () => false,
+  );
+}
+
 /** Takes the status line and the hook out of one account's settings.json, and puts the status line it had back. */
 export async function disconnectHome(h: Home): Promise<{ ok: boolean; message: string }> {
   try {
