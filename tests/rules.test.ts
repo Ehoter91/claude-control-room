@@ -3,7 +3,8 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { deriveActivity, endsWithQuestion, type StatusFile } from "../server/activity.ts";
-import { cleanSettings, folderSetting } from "../server/config.ts";
+import { accountDir, cleanAccounts, cleanSettings, folderSetting } from "../server/config.ts";
+import { homeOf, homes } from "../server/homes.ts";
 import { parseRemote, parseShortstat } from "../server/git.ts";
 import { chosenIde, ideOf, openInIde } from "../server/ide.ts";
 import { cleanName, MAX_NAME, pickName, tabName, type NameParts } from "../server/names.ts";
@@ -15,7 +16,7 @@ import { HOOK_BODY, tapScript, withConnection, withoutConnection } from "../serv
 import { HOOK_SCRIPT, TAP_SCRIPT } from "../server/paths.ts";
 import { applyLines, describeTool, emptyState, modelName, readTranscript, userText } from "../server/transcript.ts";
 import { verdictFor, type WorktreeFacts } from "../server/worktrees.ts";
-import { isEffort, isMode, isModel, modeName, modelAlias } from "../shared/claude.ts";
+import { claudeCommand, isEffort, isMode, isModel, modeName, modelAlias } from "../shared/claude.ts";
 import { isIdeId, openTarget, targetName } from "../shared/ides.ts";
 import { fitWall, TILE_MIN_H, TILE_MIN_W } from "../web/src/lib/layout.ts";
 
@@ -452,5 +453,50 @@ describe("Open in", () => {
     const r = await openInIde("pycharm", tmpdir(), false);
     expect(r.ok).toBe(false);
     expect(r.message).toContain("only git repos");
+  });
+});
+
+describe("other Claude accounts", () => {
+  const home = homedir();
+
+  it("takes an account's folder by its full path, but none that holds something else", () => {
+    expect(accountDir("~/.claude-personal/")).toBe(join(home, ".claude-personal"));
+    expect(accountDir("/Volumes/x/claude")).toBe("/Volumes/x/claude");
+    for (const bad of ["~/.claude", "~/.claude/", "~/.Claude", "~/.claude/personal", "~", "/", "/Users", "~/.claude-control-room", "~/.claude-control-room/x", "relative/dir", "", 7, null]) {
+      expect(accountDir(bad)).toBeNull();
+    }
+  });
+
+  it("keeps the saved accounts that make sense, each folder once", () => {
+    const saved = [
+      { label: "  Personal  ", dir: "~/.claude-personal" },
+      { label: "Again", dir: "~/.claude-personal/" },
+      { label: "", dir: "~/.claude-x" },
+      { label: "Side", dir: "~/.claude" },
+      "junk",
+      { label: "Side", dir: "/opt/claude-side" },
+    ];
+    expect(cleanAccounts(saved)).toEqual([
+      { label: "Personal", dir: join(home, ".claude-personal") },
+      { label: "Side", dir: "/opt/claude-side" },
+    ]);
+    expect(cleanAccounts(Array.from({ length: 9 }, (_, i) => ({ label: `A${i}`, dir: `/opt/a${i}` })))).toHaveLength(5);
+    // One folder inside another, or the same in other letters, would mix the two accounts' files.
+    expect(cleanAccounts([{ label: "A", dir: "/opt/a" }, { label: "B", dir: "/opt/a/b" }, { label: "C", dir: "/OPT/A" }, { label: "D", dir: "/opt" }])).toEqual([{ label: "A", dir: "/opt/a" }]);
+    expect(cleanSettings({}).accounts).toEqual([]);
+  });
+
+  it("knows the account of a file by the folder it lies in", () => {
+    const list = homes([{ label: "Personal", dir: "/x/.claude-personal" }]);
+    expect(homeOf("/x/.claude-personal/projects/-a/1.jsonl", list)?.account?.label).toBe("Personal");
+    expect(homeOf(join(home, ".claude", "projects", "-a", "1.jsonl"), list)?.account).toBeNull();
+    expect(homeOf("/x/.claude-personal-2/projects/-a/1.jsonl", list)).toBeNull();
+    const nested = homes([{ label: "Outer", dir: "/x/a" }, { label: "Inner", dir: "/x/a/b" }]);
+    expect(homeOf("/x/a/b/projects/1.jsonl", nested)?.account?.label).toBe("Inner");
+  });
+
+  it("writes the command for another account so it pastes safely", () => {
+    expect(claudeCommand(null)).toBe("claude");
+    expect(claudeCommand({ dir: "/Users/me/my claude" })).toBe("CLAUDE_CONFIG_DIR='/Users/me/my claude' claude");
   });
 });

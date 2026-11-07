@@ -1,5 +1,5 @@
 import { ArrowUpRight, Check, CircleCheck, Coffee, FolderGit2, Moon, RefreshCw, Sparkles, UserRound } from "lucide-react";
-import type { RateWindow, Session, Snapshot } from "../../../shared/types.ts";
+import type { RateWindow, Session, Snapshot, Usage } from "../../../shared/types.ts";
 import { duration, plural, resetLabel } from "../lib/format.ts";
 import { act, needsYou, openMenu, openSession, remember, setState, useStore, type Filter } from "../store.ts";
 import { openUrl, PrChip } from "./Monitor.tsx";
@@ -172,16 +172,46 @@ function UsageLine({ label, w, now }: { label: string; w: RateWindow | null; now
   );
 }
 
+/** One account's limits, under its name, when there is more than one account. */
+function AccountUsage(props: { label: string; email: string | null; plan: string | null; usage: Usage; connected: boolean; now: number }) {
+  return (
+    <>
+      <div className="usage-account">
+        <b>{props.label}</b>
+        <span className="muted">{props.email ?? "not signed in"}</span>
+        {props.plan && <span className="plan-pill">{props.plan}</span>}
+      </div>
+      {props.connected ? (
+        <>
+          <UsageLine label="5-hour" w={props.usage.fiveHour} now={props.now} />
+          <UsageLine label="Week" w={props.usage.sevenDay} now={props.now} />
+        </>
+      ) : (
+        <div className="usage-line">
+          <span className="muted">Not connected yet: Connect in Settings adds it</span>
+        </div>
+      )}
+    </>
+  );
+}
+
 function UsageCard({ snap }: { snap: Snapshot }) {
   const now = useNow();
   const busy = useStore((s) => s.busy);
-  const { usage, account, setup } = snap;
+  const { usage, account, setup, otherAccounts } = snap;
   return (
     <section className="card card-usage">
       <h3 className="card-title">
-        Claude usage {account.plan && <span className="plan-pill">{account.plan}</span>}
+        Claude usage {!otherAccounts.length && account.plan && <span className="plan-pill">{account.plan}</span>}
       </h3>
-      {setup.statusLine === "installed" ? (
+      {setup.statusLine === "installed" && otherAccounts.length > 0 ? (
+        <>
+          <AccountUsage label="Default" email={account.email} plan={account.plan} usage={usage} connected now={now} />
+          {otherAccounts.map((a) => (
+            <AccountUsage key={a.dir} label={a.label} email={a.loggedIn ? a.email : null} plan={a.plan} usage={a.usage} connected={a.connected} now={now} />
+          ))}
+        </>
+      ) : setup.statusLine === "installed" ? (
         <>
           <UsageLine label="5-hour" w={usage.fiveHour} now={now} />
           <UsageLine label="Week" w={usage.sevenDay} now={now} />
@@ -267,6 +297,14 @@ export function Overview({ snap }: { snap: Snapshot }) {
         <span className="strip-dot" style={{ background: "var(--approval)" }} /> {n} need you
         {snap.usage.fiveHour && <span className="muted">· 5-hour {Math.round(snap.usage.fiveHour.usedPercent)}%</span>}
         {snap.usage.sevenDay && <span className="muted">· week {Math.round(snap.usage.sevenDay.usedPercent)}%</span>}
+        {snap.otherAccounts.map(
+          (a) =>
+            a.usage.fiveHour && (
+              <span key={a.dir} className="muted">
+                · {a.label} 5-hour {Math.round(a.usage.fiveHour.usedPercent)}%
+              </span>
+            ),
+        )}
       </div>
     );
   }

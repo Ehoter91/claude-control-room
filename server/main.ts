@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { isIdeId } from "../shared/ides.ts";
 import type { ActionResult, CloseRequest, Settings } from "../shared/types.ts";
-import { currentAccount, readAccount, startAccountSwitch } from "./account.ts";
+import { MAX_ACCOUNTS } from "../shared/claude.ts";
+import { currentAccount, readAccount, readAccounts, startAccountSwitch } from "./account.ts";
+import { accountByDir } from "./homes.ts";
 import {
   answerPermission,
   answerQuestion,
@@ -29,7 +31,7 @@ import {
 } from "./actions.ts";
 import { repoClaims } from "./claims.ts";
 import { checkForUpdate, onUpdateBuilt, startUpdate } from "./update.ts";
-import { folderSetting, loadSettings, saveSettings, settings } from "./config.ts";
+import { accountDir, accountLabel, folderSetting, loadSettings, overlaps, saveSettings, settings } from "./config.ts";
 import { listWorktrees } from "./git.ts";
 import { allPrs, checkGh } from "./github.ts";
 import { isTyping, resizeConsole, stopConsole, typeInConsole, watchConsole } from "./console.ts";
@@ -40,7 +42,7 @@ import { noteUsed } from "./order.ts";
 import { APP_DIR, BRIDGE_FILE, TAP_DIR } from "./paths.ts";
 import { readPower, setSleepDisabled, sudoersLine } from "./power.ts";
 import { forgetStories, testToken } from "./shortcut.ts";
-import { installStatusLine, uninstallStatusLine } from "./statusline.ts";
+import { disconnectHome, installStatusLine, uninstallStatusLine } from "./statusline.ts";
 import { installHelper, openStream, resolveResult, updateWindow } from "./vscode.ts";
 import { buildReport, insidePath, prsByBranch, scanRepo, type ScanJob } from "./worktrees.ts";
 
@@ -235,7 +237,9 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
         return send(res, 400, { ok: false, message: "Nothing to open" });
       }
       case "/api/settings": {
-        const b = await body<Partial<Settings> & { addShortcutToken?: string; removeShortcutToken?: number }>(req);
+        const b = await body<
+          Partial<Settings> & { addShortcutToken?: string; removeShortcutToken?: number; addAccount?: { label?: unknown; dir?: unknown }; removeAccount?: string }
+        >(req);
         const patch: Partial<Settings> = {};
         for (const key of ["notifications", "sounds", "aiSummaries", "includeIdePanel"] as const) {
           if (typeof b[key] === "boolean") patch[key] = b[key];
@@ -261,6 +265,34 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
           patch.shortcutTokens = settings().shortcutTokens.filter((_, i) => i !== b.removeShortcutToken);
           forgetStories();
         }
+        if (b.addAccount) {
+          const dir = accountDir(b.addAccount.dir);
+          const label = accountLabel(b.addAccount.label);
+          const accounts = settings().accounts;
+          if (!label) return send(res, 200, { ok: false, message: "Give the account a name, such as Personal." });
+          if (!dir) return send(res, 200, { ok: false, message: "Pick a folder by its full path, such as ~/.claude-personal. It can't be ~/.claude or in it." });
+          const taken = accounts.find((a) => overlaps(a.dir, dir));
+          if (taken) return send(res, 200, { ok: false, message: `That folder is ${taken.label}'s, or holds it or sits in it.` });
+          if (accounts.length >= MAX_ACCOUNTS) return send(res, 200, { ok: false, message: `Control Room takes up to ${MAX_ACCOUNTS} other accounts.` });
+          // Claude Code keeps a login in it, so only you may read it.
+          await mkdir(dir, { recursive: true, mode: 0o700 });
+          patch.accounts = [...accounts, { label, dir }];
+          message = `Added ${label}. Sign in to it next.`;
+          // Asking claude takes a few seconds; the account shows meanwhile, signed in or not once known.
+          void readAccount({ label, dir }).then(() => monitor.tick());
+        }
+        if (typeof b.removeAccount === "string") {
+          const gone = settings().accounts.find((a) => a.dir === b.removeAccount);
+          // Its sessions would vanish from here, and those started here would run on with no way to reach them.
+          const open = (monitor.snapshot?.sessions ?? []).filter((s) => s.account?.dir === gone?.dir).length;
+          if (gone && open) return send(res, 200, { ok: false, message: `Close the ${open} session${open === 1 ? "" : "s"} on ${gone.label} first.` });
+          // Once it is out of the list, Disconnect no longer reaches it, so its settings get theirs back now.
+          if (gone) {
+            const out = await disconnectHome({ account: gone, dir: gone.dir });
+            if (!out.ok) return send(res, 200, out);
+          }
+          patch.accounts = settings().accounts.filter((a) => a.dir !== b.removeAccount);
+        }
         await saveSettings(patch);
         await monitor.tick();
         return send(res, 200, { ok: true, message });
@@ -281,10 +313,15 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
       }
       case "/api/setup/vscode":
         return send(res, 200, await installHelper(VSIX));
-      case "/api/account/switch":
-        return send(res, 200, await startAccountSwitch());
+      case "/api/account/switch": {
+        // Left out, the usual account; else one from Settings, by its folder.
+        const b = await body<{ dir?: string }>(req);
+        const ref = b.dir ? accountByDir(b.dir) : null;
+        if (b.dir && !ref) return send(res, 200, { ok: false, message: "That account is not in Settings any more." });
+        return send(res, 200, await startAccountSwitch(ref));
+      }
       case "/api/account/refresh":
-        await readAccount();
+        await readAccounts();
         await monitor.tick();
         return send(res, 200, { ok: true, message: currentAccount().email ?? "Not signed in" });
       case "/api/worktrees/scan": {
@@ -374,12 +411,12 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
   await writeFile(BRIDGE_FILE, JSON.stringify({ port, pid: process.pid, startedAt: Date.now() }) + "\n");
 
   await cleanOldTaps();
-  await Promise.all([readPower(), checkGh(), readAccount()]);
+  await Promise.all([readPower(), checkGh(), readAccounts()]);
   await monitor.tick();
   const timers = [
     setInterval(() => void monitor.tick(), 1_200),
     setInterval(() => void readPower(), 30_000),
-    setInterval(() => void readAccount(), 180_000),
+    setInterval(() => void readAccounts(), 180_000),
   ];
 
   return {

@@ -2,8 +2,9 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { IdeId } from "../shared/ides.ts";
-import type { ChatLine, Session, Snapshot, Summary } from "../shared/types.ts";
+import type { AccountRef, ChatLine, OtherAccount, Session, Snapshot, Summary } from "../shared/types.ts";
 import { currentAccount } from "./account.ts";
+import { type Home, homeDir, homes, projectsDir, sessionsDir } from "./homes.ts";
 import { deriveActivity, type StatusFile } from "./activity.ts";
 import { claimsOf, repoClaims } from "./claims.ts";
 import { publicSettings, settings } from "./config.ts";
@@ -11,12 +12,12 @@ import { gitInfo } from "./git.ts";
 import { ghReady, openSince, prByNumber, prForBranch, refreshRepo } from "./github.ts";
 import { type HostedPane, hostedName, hostedPanes, isTerminalName, screenLines, tmuxReady } from "./hosted.ts";
 import { ideOf, installedIdes, noteConnectedIdes } from "./ide.ts";
-import { CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, HOME, SUMMARIZER_CWD } from "./paths.ts";
+import { HOME, SUMMARIZER_CWD } from "./paths.ts";
 import { powerState } from "./power.ts";
 import { basename, isClaudeComm, processTable, sleep, type ProcRow } from "./proc.ts";
 import { bridgeIdOf, remoteUrl } from "./remote.ts";
 import { findStoryId, shortcutReady, story as storyFor } from "./shortcut.ts";
-import { defaultEffort, latestUsage, readPermission, readTap, statusLineState } from "./statusline.ts";
+import { defaultEffort, latestUsages, readPermission, readTap, statusLineState } from "./statusline.ts";
 import { maybeSummarize, storedSummary } from "./summaries.ts";
 import { sortKey, usedAt } from "./order.ts";
 import { updateState } from "./update.ts";
@@ -34,19 +35,26 @@ export interface SessionFile extends StatusFile {
   nameSource: string | null;
   tmux: string | null;
   bridgeSessionId: string | null; // set while Remote Control is on
+  account: AccountRef | null; // the account whose config folder holds the file; null for ~/.claude
 }
 
-export async function readSessionFiles(): Promise<SessionFile[]> {
+/** The session files of every account. */
+export async function readSessionFiles(list: Home[] = homes()): Promise<SessionFile[]> {
+  return (await Promise.all(list.map(readHomeSessions))).flat();
+}
+
+async function readHomeSessions(home: Home): Promise<SessionFile[]> {
+  const dir = sessionsDir(home.dir);
   let names: string[];
   try {
-    names = (await readdir(CLAUDE_SESSIONS_DIR)).filter((n) => /^\d+\.json$/.test(n));
+    names = (await readdir(dir)).filter((n) => /^\d+\.json$/.test(n));
   } catch {
     return [];
   }
   const files = await Promise.all(
     names.map(async (n) => {
       try {
-        const d = JSON.parse(await readFile(join(CLAUDE_SESSIONS_DIR, n), "utf8"));
+        const d = JSON.parse(await readFile(join(dir, n), "utf8"));
         const file: SessionFile = {
           pid: Number(d.pid),
           sessionId: String(d.sessionId ?? ""),
@@ -62,6 +70,7 @@ export async function readSessionFiles(): Promise<SessionFile[]> {
           statusUpdatedAt: typeof d.statusUpdatedAt === "number" ? d.statusUpdatedAt : null,
           tmux: typeof d.tmux === "string" ? d.tmux : null,
           bridgeSessionId: bridgeIdOf(d.bridgeSessionId),
+          account: home.account,
         };
         return file;
       } catch {
@@ -78,18 +87,22 @@ function encodeProjectDir(cwd: string): string {
 
 const transcriptPaths = new Map<string, { path: string | null; at: number }>();
 
-/** `fresh` skips the remembered "none yet": a first message may have just written it. */
-export async function findTranscript(sessionId: string, cwd: string, fresh = false): Promise<string | null> {
+/**
+ * The conversation file, in the projects folder of the session's account. `fresh` skips the remembered "none yet": a
+ * first message may have just written it.
+ */
+export async function findTranscript(sessionId: string, cwd: string, account: AccountRef | null, fresh = false): Promise<string | null> {
   const hit = transcriptPaths.get(sessionId);
   if (hit?.path && existsSync(hit.path)) return hit.path;
   if (hit && !hit.path && !fresh && Date.now() - hit.at < 20_000) return null;
   let found: string | null = null;
-  const direct = join(CLAUDE_PROJECTS_DIR, encodeProjectDir(cwd), `${sessionId}.jsonl`);
+  const projects = projectsDir(homeDir(account));
+  const direct = join(projects, encodeProjectDir(cwd), `${sessionId}.jsonl`);
   if (existsSync(direct)) found = direct;
   else {
     try {
-      for (const dir of await readdir(CLAUDE_PROJECTS_DIR)) {
-        const p = join(CLAUDE_PROJECTS_DIR, dir, `${sessionId}.jsonl`);
+      for (const dir of await readdir(projects)) {
+        const p = join(projects, dir, `${sessionId}.jsonl`);
         if (existsSync(p)) {
           found = p;
           break;
@@ -154,7 +167,7 @@ export class Monitor {
   private lastJson = "";
   private prevStatus = new Map<string, string>();
   private transcripts = new Map<number, TranscriptState>();
-  private effortDefault: string | null = null;
+  private effortDefaults = new Map<string, string | null>(); // by config folder
   private effortReadAt = 0;
   private ticking = false;
   procs = new Map<number, ProcRow>();
@@ -199,9 +212,10 @@ export class Monitor {
     // Asked every time: a terminal there has no session file to tell of it. When tmux can't answer, the last answer
     // stands, so a console stays open.
     this.hosted = (await hostedPanes()) ?? this.hosted;
-    await noteConnectedIdes(procs);
+    const all = homes();
+    await noteConnectedIdes(procs, all.map((h) => h.dir));
     if (Date.now() - this.effortReadAt > 60_000) {
-      this.effortDefault = await defaultEffort();
+      this.effortDefaults = new Map(await Promise.all(all.map(async (h) => [h.dir, await defaultEffort(h.dir)] as const)));
       this.effortReadAt = Date.now();
     }
     const live = files.filter((f) => {
@@ -223,13 +237,21 @@ export class Monitor {
     // still while sessions run.
     const list = sessions.filter((s): s is Session => s !== null).sort((a, b) => b.sortKey - a.sortKey || b.startedAt - a.startedAt);
 
-    const [usage, connection] = await Promise.all([latestUsage(), statusLineState()]);
+    const [usages, connections] = await Promise.all([latestUsages(all), Promise.all(all.map((h) => statusLineState(h.dir)))]);
+    const connection = connections[0];
+    const otherAccounts: OtherAccount[] = all.slice(1).map((h, i) => ({
+      ...currentAccount(h.dir),
+      ...h.account!,
+      usage: usages[i + 1],
+      connected: connections[i + 1].statusLine === "installed" && connections[i + 1].hooks,
+    }));
     const windows = bridgeConnected();
     const snapshot: Snapshot = {
       at: Date.now(),
       sessions: list,
-      usage,
+      usage: usages[0],
       account: currentAccount(),
+      otherAccounts,
       power: powerState(),
       setup: {
         statusLine: connection.statusLine,
@@ -256,7 +278,7 @@ export class Monitor {
     const cfg = settings();
     const proc = procs.get(f.pid);
     const tap = await readTap(f.sessionId);
-    const path = (tap?.transcriptPath && existsSync(tap.transcriptPath) ? tap.transcriptPath : null) ?? (await findTranscript(f.sessionId, f.cwd));
+    const path = (tap?.transcriptPath && existsSync(tap.transcriptPath) ? tap.transcriptPath : null) ?? (await findTranscript(f.sessionId, f.cwd, f.account));
     const t = path ? await readTranscript(path) : null;
     if (t) this.transcripts.set(f.pid, t);
     const cwd = tap?.cwd ?? t?.cwd ?? f.cwd;
@@ -330,6 +352,7 @@ export class Monitor {
       void maybeSummarize(
         {
           sessionId: f.sessionId,
+          account: f.account,
           basisAt: t.lastEntryAt ?? 0,
           status: `${activity.label}${activity.detail ? ` — ${activity.detail}` : ""}`,
           title,
@@ -345,6 +368,7 @@ export class Monitor {
       void maybeSummarize(
         {
           sessionId: f.sessionId,
+          account: f.account,
           basisAt: t.lastEntryAt ?? 0,
           status: "Inactive",
           title,
@@ -359,7 +383,7 @@ export class Monitor {
 
     const chat: ChatLine[] = t ? t.chat.slice(-PREVIEW_LINES) : [];
     const lastUsedAt = Math.max(f.startedAt, t?.lastPromptAt ?? 0, usedAt(f.sessionId));
-    const effort = tap?.effort ?? ask?.effort ?? t?.effort ?? this.effortDefault;
+    const effort = tap?.effort ?? ask?.effort ?? t?.effort ?? this.effortDefaults.get(homeDir(f.account)) ?? null;
     return {
       pid: f.pid,
       shellPid,
@@ -396,6 +420,7 @@ export class Monitor {
       hosted: this.hosted.some((p) => p.name === hostedName(f.tmux)),
       remoteUrl: remoteUrl(f.bridgeSessionId),
       terminal: null,
+      account: f.account,
     };
   }
 
@@ -452,6 +477,7 @@ export class Monitor {
       hosted: true,
       remoteUrl: null,
       terminal: { command, screen },
+      account: null,
     };
   }
 }

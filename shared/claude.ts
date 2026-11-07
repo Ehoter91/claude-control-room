@@ -59,3 +59,16 @@ export function modeName(mode: string | null): string | null {
   const id = mode === "default" ? "manual" : mode;
   return MODES.find((m) => m.id === id)?.label ?? id;
 }
+
+/** Quotes a word for the shell, so it stays one word whatever is in it. */
+export function shellQuote(text: string): string {
+  return `'${text.replace(/'/g, `'\\''`)}'`;
+}
+
+/** How many Claude accounts Control Room takes besides the usual one. */
+export const MAX_ACCOUNTS = 5;
+
+/** What starts Claude Code on an account, for a command to copy: plain `claude` for the usual one. */
+export function claudeCommand(account: { dir: string } | null): string {
+  return account ? `CLAUDE_CONFIG_DIR=${shellQuote(account.dir)} claude` : "claude";
+}

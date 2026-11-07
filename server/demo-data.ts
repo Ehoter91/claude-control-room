@@ -29,6 +29,7 @@ interface Seed {
   story?: Pick<Story, "id" | "name" | "state">;
   claim?: string[]; // paths the session claimed in the repo's worktree registry
   remote?: boolean; // on Remote Control, so it is in the Claude app too
+  personal?: boolean; // on the second Claude account
   model: string;
   effort: string;
   context: number;
@@ -222,6 +223,7 @@ const SEEDS: Seed[] = [
     pid: 46980,
     name: "Welcome email",
     repo: "marketing-site",
+    personal: true,
     worktree: "marketing-site-welcome-email",
     branch: "copy/welcome-email",
     started: 3060,
@@ -420,8 +422,11 @@ function sessionOf(s: Seed, now: number): Session {
     hosted: false,
     remoteUrl: s.remote ? `https://claude.ai/code/session_demo${s.pid}` : null,
     terminal: null,
+    account: s.personal ? PERSONAL : null,
   };
 }
+
+const PERSONAL = { label: "Personal", dir: "/Users/you/.claude-personal" };
 
 /** A whole dashboard's worth of sample data, with every time counted back from `now`. */
 export function demoSnapshot(now: number, count = DEMO_DEFAULT_COUNT): Snapshot {
@@ -437,6 +442,17 @@ export function demoSnapshot(now: number, count = DEMO_DEFAULT_COUNT): Snapshot 
       observedAt: now,
     },
     account: { email: "you@example.com", orgName: "Acme", plan: "max", loggedIn: true },
+    otherAccounts: [
+      {
+        ...PERSONAL,
+        email: "you@gmail.com",
+        orgName: null,
+        plan: "pro",
+        loggedIn: true,
+        connected: true,
+        usage: { fiveHour: { usedPercent: 12, resetsAt: now + 201 * MIN }, sevenDay: { usedPercent: 23, resetsAt: now + 4 * 24 * 60 * MIN }, observedAt: now },
+      },
+    ],
     power: { sleepDisabled: true, passwordless: false },
     update: {
       source: "/Users/you/code/claude-control-room",
@@ -464,6 +480,7 @@ export function demoSnapshot(now: number, count = DEMO_DEFAULT_COUNT): Snapshot 
       terminalFolder: "/Users/you/code",
       layout: "fit",
       shortcutTokens: ["••••8c2f"],
+      accounts: [PERSONAL],
     },
   };
 }

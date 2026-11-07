@@ -2,10 +2,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 export const HOME = homedir();
+// The usual account's Claude Code config folder. Others are in Settings; accounts.ts has the folders inside each.
 export const CLAUDE_DIR = join(HOME, ".claude");
-export const CLAUDE_SESSIONS_DIR = join(CLAUDE_DIR, "sessions");
-export const CLAUDE_PROJECTS_DIR = join(CLAUDE_DIR, "projects");
-export const CLAUDE_SETTINGS = join(CLAUDE_DIR, "settings.json");
 
 export const APP_DIR = join(HOME, ".claude-control-room");
 export const CONFIG_FILE = join(APP_DIR, "config.json");

@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Summary } from "../shared/types.ts";
+import type { AccountRef, Summary } from "../shared/types.ts";
+import { claudeEnv } from "./homes.ts";
 import { SUMMARIZER_CWD, SUMMARY_DIR } from "./paths.ts";
 import { run } from "./proc.ts";
 
@@ -18,6 +19,7 @@ Reply with JSON only: {"headline": "...", "now": "..."}`;
 
 export interface SummaryInput {
   sessionId: string;
+  account: AccountRef | null; // the summary runs on the session's own account, never on another one
   basisAt: number; // time of the newest transcript entry the summary covers
   status: string;
   title: string | null;
@@ -134,7 +136,7 @@ async function summarize(input: SummaryInput): Promise<void> {
       "--system-prompt",
       SYSTEM,
     ],
-    { cwd: SUMMARIZER_CWD, timeoutMs: 90_000, input: buildPrompt(input) },
+    { cwd: SUMMARIZER_CWD, timeoutMs: 90_000, input: buildPrompt(input), env: claudeEnv(input.account) },
   );
   let parsed: { headline: string; now: string | null } | null = null;
   try {

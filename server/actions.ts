@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
-import { isEffort, isMode, isModel, modeName, modelAlias, MODELS } from "../shared/claude.ts";
+import { claudeCommand, isEffort, isMode, isModel, modeName, modelAlias, MODELS } from "../shared/claude.ts";
 import { openTarget } from "../shared/ides.ts";
 import type { ActionResult, ClosePlan, CloseRequest, Session, WorktreeReport } from "../shared/types.ts";
+import { accountByDir, homeDir } from "./homes.ts";
 import { endClaim, forgetClaims, repoClaims } from "./claims.ts";
 import { folderSetting, settings } from "./config.ts";
 import { git, listWorktrees } from "./git.ts";
@@ -207,7 +208,7 @@ export async function setModel(monitor: Monitor, pid: number, model: unknown): P
     const t = await switched(s, (x) => modelAlias(x.modelId) === model);
     await sleep(300); // Claude Code saves the default right around the time it reports the change
     return t ? { ok: true, message: `Now on ${t.model ?? label}` } : { ok: true, message: `Sent /model ${model}. If it did not change, look at the session to see why.` };
-  });
+  }, homeDir(s.account));
   await monitor.tick();
   return out;
 }
@@ -225,7 +226,7 @@ export async function setEffort(monitor: Monitor, pid: number, effort: unknown):
     const t = await switched(s, (x) => x.effort === effort);
     await sleep(300);
     return t ? { ok: true, message: `Effort set to ${effort}` } : { ok: true, message: `Sent /effort ${effort}. If it did not change, look at the session to see why.` };
-  });
+  }, homeDir(s.account));
   await monitor.tick();
   return out;
 }
@@ -351,6 +352,7 @@ interface NewSessionBody {
   model?: unknown;
   effort?: unknown;
   mode?: unknown;
+  account?: unknown; // the config folder of an account in Settings; left out, the usual one
 }
 
 /** Starts Claude Code in Control Room, in a folder of your choice, with an optional first message. */
@@ -360,7 +362,10 @@ export async function newSession(monitor: Monitor, b: NewSessionBody): Promise<A
   const model = isModel(b.model) ? b.model : null;
   const effort = isEffort(b.effort) ? b.effort : null;
   const mode = isMode(b.mode) ? b.mode : null;
-  const r = await startSession({ cwd: typeof b.cwd === "string" ? b.cwd : "", prompt, model, effort, mode });
+  // Only an account from Settings: the folder becomes CLAUDE_CONFIG_DIR.
+  const account = b.account ? accountByDir(b.account) : null;
+  if (b.account && !account) return { ok: false, message: "That account is not in Settings any more." };
+  const r = await startSession({ cwd: typeof b.cwd === "string" ? b.cwd : "", prompt, model, effort, mode, account });
   if (!r.ok || !r.name) return r;
   // Claude Code writes its session file within a second or two; a longer wait means it asks something first.
   const file = await hostedFile(r.name, 5_000);
@@ -395,9 +400,10 @@ export async function moveSession(monitor: Monitor, pid: number): Promise<Action
     if (!tmuxReady()) return { ok: false, message: "Control Room needs tmux for this. Install it: brew install tmux" };
     if (!existsSync(file.cwd)) return { ok: false, message: `Its folder is gone: ${file.cwd}` };
     // Claude Code saves a conversation at its first message; one with none has nothing to resume, so it starts fresh.
-    const resume = (await findTranscript(s.sessionId, file.cwd, true)) ? s.sessionId : undefined;
+    const resume = (await findTranscript(s.sessionId, file.cwd, file.account, true)) ? s.sessionId : undefined;
     if (!(await stopProcess(pid))) return { ok: false, message: "Claude did not stop, so the session stays where it is." };
-    const resumeHint = resume ? `To continue it yourself, run in ${file.cwd}: claude --resume ${resume}` : `To start it yourself, run claude in ${file.cwd}`;
+    const claude = claudeCommand(file.account);
+    const resumeHint = resume ? `To continue it yourself, run in ${file.cwd}: ${claude} --resume ${resume}` : `To start it yourself, run ${claude} in ${file.cwd}`;
     // It keeps its model, effort and mode: a resumed session would start on your defaults.
     const mode = s.mode === "default" ? "manual" : s.mode;
     const keep = {
@@ -405,8 +411,9 @@ export async function moveSession(monitor: Monitor, pid: number): Promise<Action
       effort: !s.effortIsDefault && isEffort(s.effort) ? s.effort : null,
       mode: isMode(mode) ? mode : null,
     };
-    // Claude Code keeps a conversation under the folder it started in, so it continues from there.
-    const r = await startSession({ cwd: file.cwd, resume, ...keep });
+    // Claude Code keeps a conversation under the folder it started in, and in its account's config folder, so it
+    // continues from both.
+    const r = await startSession({ cwd: file.cwd, resume, account: file.account, ...keep });
     if (!r.ok || !r.name) return { ok: false, message: `It stopped, but did not start here: ${r.message} ${resumeHint}` };
     const fileHere = await hostedFile(r.name, 15_000);
     const pidHere = fileHere?.pid ?? null;

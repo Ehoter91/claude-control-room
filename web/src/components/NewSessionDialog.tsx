@@ -24,6 +24,12 @@ export function NewSessionDialog({ snap }: { snap: Snapshot }) {
   // Empty means Claude Code's own default. The last choice is kept for next time.
   const [tune, setTune] = useState(() => stored("cr.newSessionTune", { model: "", effort: "", mode: DEFAULT_MODE }));
   const setTuned = (part: Partial<typeof tune>) => setTune((t) => ({ ...t, ...part }));
+  // The config folder of another account, or "" for the usual one; the last choice is kept while that account is.
+  const [account, setAccount] = useState(() => {
+    const last = stored("cr.newSessionAccount", "");
+    return snap.otherAccounts.some((a) => a.dir === last) ? last : "";
+  });
+  const chosen = snap.otherAccounts.find((a) => a.dir === account) ?? null;
   const [starting, setStarting] = useState(false);
   const [waiting, setWaiting] = useState<string | null>(null); // a console that must be answered before the session shows
   const open = useRef(true);
@@ -58,7 +64,7 @@ export function NewSessionDialog({ snap }: { snap: Snapshot }) {
   const start = async () => {
     if (!cwd.trim() || starting) return;
     setStarting(true);
-    const r = await api<ActionResult & { pid?: number; name?: string }>("/api/sessions/new", { cwd: cwd.trim(), prompt, ...tune }).catch(
+    const r = await api<ActionResult & { pid?: number; name?: string }>("/api/sessions/new", { cwd: cwd.trim(), prompt, ...tune, account: account || undefined }).catch(
       (err: Error) => ({ ok: false, message: err.message }) as ActionResult & { pid?: number; name?: string },
     );
     // Closed while it started: the session runs, and shows in the list, but nothing jumps at you.
@@ -66,6 +72,7 @@ export function NewSessionDialog({ snap }: { snap: Snapshot }) {
     setStarting(false);
     if (!r.ok) return toast(r.message, "error");
     remember("cr.newSessionTune", tune);
+    remember("cr.newSessionAccount", account);
     remember("cr.recentFolders", [cwd.trim(), ...stored<string[]>("cr.recentFolders", []).filter((f) => f !== cwd.trim())].slice(0, 8));
     if (r.pid) setState({ panel: null, drawer: r.pid, selected: r.pid, typeInto: r.pid });
     else if (r.name) setWaiting(r.name);
@@ -129,6 +136,21 @@ export function NewSessionDialog({ snap }: { snap: Snapshot }) {
                 )}
               </div>
             </label>
+
+            {snap.otherAccounts.length > 0 && (
+              <label className="field">
+                <span className="field-label">Account</span>
+                <select className="select" value={account} onChange={(e) => setAccount(e.target.value)}>
+                  <option value="">Default · {snap.account.email ?? "not signed in"}</option>
+                  {snap.otherAccounts.map((a) => (
+                    <option key={a.dir} value={a.dir}>
+                      {a.label} · {a.loggedIn ? (a.email ?? "signed in") : "not signed in"}
+                    </option>
+                  ))}
+                </select>
+                {chosen && !chosen.loggedIn && <span className="field-hint">Not signed in yet. Claude Code asks you to sign in, in the console here.</span>}
+              </label>
+            )}
 
             <label className="field">
               <span className="field-label">

@@ -110,7 +110,8 @@ export function TopBar({ snap }: { snap: Snapshot | null }) {
 export function SetupBanner({ snap }: { snap: Snapshot }) {
   const busy = useStore((s) => s.busy);
   const [hidden, setHidden] = useState(() => sessionStorage.getItem("cr.setupHidden") === "1");
-  const needStatus = snap.setup.statusLine !== "installed" || !snap.setup.hooks;
+  // Each account reports only once it is connected too; one signed in later is not yet.
+  const needStatus = snap.setup.statusLine !== "installed" || !snap.setup.hooks || snap.otherAccounts.some((a) => a.loggedIn && !a.connected);
   const needVscode = snap.setup.vscodeHelper === "missing" && snap.sessions.some((s) => s.ide === "vscode");
   if (hidden || VIEW.wallOnly || (!needStatus && !needVscode)) return null;
   return (

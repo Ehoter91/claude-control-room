@@ -13,6 +13,7 @@ import {
   PictureInPicture2,
   Smartphone,
   SquareKanban,
+  UserRound,
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -55,6 +56,17 @@ export function PrChip({ pr }: { pr: PullRequest }) {
       {checks}
       {pr.review === "APPROVED" && <Check size={12} className="tone-good" />}
     </button>
+  );
+}
+
+/** The other Claude account a session runs on. The usual account shows nothing. */
+export function AccountChip({ s }: { s: Session }) {
+  if (!s.account) return null;
+  return (
+    <span className="chip chip-account" data-tip={`On your ${s.account.label} account, from ${s.account.dir}`}>
+      <UserRound size={12} />
+      <span className="chip-text">{s.account.label}</span>
+    </span>
   );
 }
 
@@ -337,6 +349,7 @@ export function Monitor({ s, index, selected }: { s: Session; index: number; sel
       <p className="mon-task">{taskLine(s)}</p>
 
       <div className="mon-chips">
+        <AccountChip s={s} />
         {s.pr && <PrChip pr={s.pr} />}
         <StoryChip s={s} />
         <GitChips s={s} />

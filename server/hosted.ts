@@ -6,7 +6,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { isEffort, isMode, isModel } from "../shared/claude.ts";
 import { isHostedName } from "../shared/hosted.ts";
-import type { ActionResult } from "../shared/types.ts";
+import type { AccountRef, ActionResult } from "../shared/types.ts";
 import { APP_DIR } from "./paths.ts";
 import { CHILD_ENV, run } from "./proc.ts";
 
@@ -40,8 +40,9 @@ export function tmuxArgs(...args: string[]): string[] {
 export { hostedName, isHostedName, isTerminalName } from "../shared/hosted.ts";
 
 // The variables of whoever started Control Room (Electron, npm, or a Claude Code session) must not reach a new
-// session: a Claude Code that sees CLAUDECODE thinks it runs inside another one.
-const FOREIGN = /^(CLAUDECODE|CLAUDE_CODE_.*|CLAUDE_AGENT_.*|ELECTRON_.*|npm_.*|NODE_OPTIONS|INIT_CWD|VSCODE_.*|TERM_PROGRAM.*|TMUX|TMUX_PANE|COLUMNS|LINES)$/;
+// session: a Claude Code that sees CLAUDECODE thinks it runs inside another one, and one that inherits
+// CLAUDE_CONFIG_DIR runs on whatever account that names.
+const FOREIGN = /^(CLAUDECODE|CLAUDE_CODE_.*|CLAUDE_AGENT_.*|CLAUDE_CONFIG_DIR|ELECTRON_.*|npm_.*|NODE_OPTIONS|INIT_CWD|VSCODE_.*|TERM_PROGRAM.*|TMUX|TMUX_PANE|COLUMNS|LINES)$/;
 
 export function sessionEnv(base: NodeJS.ProcessEnv = CHILD_ENV): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
@@ -102,6 +103,7 @@ export interface StartOptions {
   model?: string | null; // an alias such as "opus", or a full model name
   effort?: string | null;
   mode?: string | null; // permission mode
+  account?: AccountRef | null; // another Claude account: its config folder; the usual one when left out
   cols?: number;
   rows?: number;
 }
@@ -120,8 +122,11 @@ export function newSessionArgs(name: string, o: StartOptions, shell = process.en
   ];
   const cols = String(Math.max(40, Math.min(400, Math.round(o.cols ?? 120))));
   const rows = String(Math.max(10, Math.min(200, Math.round(o.rows ?? 36))));
+  // Another account: Claude Code finds its login, settings and sessions in the folder CLAUDE_CONFIG_DIR names. It is
+  // set after the shell has read ~/.zshrc, so nothing there points the session elsewhere.
+  const command = o.account ? 'export CLAUDE_CONFIG_DIR="$1"; shift; claude "$@"' : 'claude "$@"';
   // "$@" hands the prompt over as one argument, so nothing in it is read by the shell.
-  return ["-f", CONF, "-u", "new-session", "-d", "-s", name, "-c", o.cwd, "-x", cols, "-y", rows, shell, "-lic", 'claude "$@"', "claude", ...claude];
+  return ["-f", CONF, "-u", "new-session", "-d", "-s", name, "-c", o.cwd, "-x", cols, "-y", rows, shell, "-lic", command, "claude", ...(o.account ? [o.account.dir] : []), ...claude];
 }
 
 async function writeConf(): Promise<void> {

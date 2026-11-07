@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { chmod, copyFile, mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { RateWindow, SetupState, Usage } from "../shared/types.ts";
-import { BACKUP_DIR, CLAUDE_SETTINGS, HOOK_DIR, HOOK_SCRIPT, TAP_DIR, TAP_SCRIPT } from "./paths.ts";
+import { type Home, homeOf, homes, settingsFile } from "./homes.ts";
+import { APP_DIR, BACKUP_DIR, CLAUDE_DIR, HOOK_DIR, HOOK_SCRIPT, TAP_DIR, TAP_SCRIPT } from "./paths.ts";
 
 // Claude Code runs this on every reply; it saves the JSON it receives and prints a short status line.
 // A status line the person already had is kept: it still runs and its output is what they see.
@@ -57,33 +59,43 @@ exit 0
 
 const HOOK_EVENT = "PermissionRequest";
 
-async function readSettings(): Promise<ClaudeSettings> {
-  return JSON.parse(await readFile(CLAUDE_SETTINGS, "utf8")) as ClaudeSettings;
+// Each account has its own settings.json, in its config folder: ~/.claude for the usual one.
+async function readSettings(dir = CLAUDE_DIR): Promise<ClaudeSettings> {
+  return JSON.parse(await readFile(settingsFile(dir), "utf8")) as ClaudeSettings;
 }
 
-async function writeSettings(next: ClaudeSettings): Promise<void> {
-  const tmp = `${CLAUDE_SETTINGS}.control-room.tmp`;
+/** An account that never saved a setting has no settings.json yet; a file that does not parse still stops a write. */
+async function readSettingsOrNone(dir: string): Promise<ClaudeSettings> {
+  return readSettings(dir).catch((err: NodeJS.ErrnoException) => (err.code === "ENOENT" ? {} : Promise.reject(err)));
+}
+
+async function writeSettings(next: ClaudeSettings, dir = CLAUDE_DIR): Promise<void> {
+  const file = settingsFile(dir);
+  await mkdir(dir, { recursive: true });
+  const tmp = `${file}.control-room.tmp`;
   await writeFile(tmp, JSON.stringify(next, null, 2) + "\n");
-  await rename(tmp, CLAUDE_SETTINGS);
+  await rename(tmp, file);
 }
 
 const DEFAULT_KEYS = ["model", "modelSettings", "effortLevel"] as const;
 
 /**
  * Claude Code's /model and /effort also save the choice as the default for new sessions. A change made from
- * Control Room is for one session only, so this puts the saved defaults back once `change` is done.
+ * Control Room is for one session only, so this puts the saved defaults back once `change` is done: in the settings of
+ * the session's own account.
  */
-export async function keepDefaults<T>(change: () => Promise<T>): Promise<T> {
-  const before = await readSettings().catch(() => null);
+export async function keepDefaults<T>(change: () => Promise<T>, dir = CLAUDE_DIR): Promise<T> {
+  // An account that never saved a setting has no file yet: whatever /model writes there is taken out again.
+  const before = await readSettingsOrNone(dir).catch(() => null);
   try {
     return await change();
   } finally {
-    if (before) await restoreDefaults(before).catch(() => {});
+    if (before) await restoreDefaults(before, dir).catch(() => {});
   }
 }
 
-async function restoreDefaults(before: Record<string, unknown>): Promise<void> {
-  const now: Record<string, unknown> = await readSettings();
+async function restoreDefaults(before: Record<string, unknown>, dir: string): Promise<void> {
+  const now: Record<string, unknown> = await readSettings(dir);
   let changed = false;
   for (const key of DEFAULT_KEYS) {
     if (JSON.stringify(now[key]) === JSON.stringify(before[key])) continue;
@@ -91,14 +103,38 @@ async function restoreDefaults(before: Record<string, unknown>): Promise<void> {
     else now[key] = before[key];
     changed = true;
   }
-  if (changed) await writeSettings(now);
+  if (changed) await writeSettings(now, dir);
 }
 
-async function backupSettings(): Promise<string> {
+// The usual account's files keep their old names; another account's carry a short id of its folder.
+function homeId(h: Home): string {
+  return createHash("sha256").update(h.dir).digest("hex").slice(0, 10);
+}
+
+function backupName(h: Home, name: string): string {
+  return h.account ? name.replace(/^([^.]+)/, `$1-${homeId(h)}`) : name;
+}
+
+/** Each account has its own script, so the status line it had keeps showing in it. */
+function tapPath(h: Home): string {
+  return h.account ? join(APP_DIR, `statusline-tap-${homeId(h)}.sh`) : TAP_SCRIPT;
+}
+
+/** Control Room's status line, whichever account's script it runs. */
+function isTap(command: string | undefined): boolean {
+  return !!command?.includes(join(APP_DIR, "statusline-tap"));
+}
+
+async function backupSettings(h: Home): Promise<string | null> {
   await mkdir(BACKUP_DIR, { recursive: true });
-  const target = join(BACKUP_DIR, `settings.${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
-  await copyFile(CLAUDE_SETTINGS, target);
-  return target;
+  const target = join(BACKUP_DIR, backupName(h, `settings.${new Date().toISOString().replace(/[:.]/g, "-")}.json`));
+  try {
+    await copyFile(settingsFile(h.dir), target);
+    return target;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null; // nothing to back up yet
+    throw err;
+  }
 }
 
 function isOurs(entry: HookEntry): boolean {
@@ -110,8 +146,8 @@ export function hookInstalled(settings: ClaudeSettings): boolean {
 }
 
 /** Pure: the settings with our status line and hook added. Kept separate so the merge is tested alone. */
-export function withConnection(settings: ClaudeSettings): ClaudeSettings {
-  const next: ClaudeSettings = { ...settings, statusLine: { type: "command", command: TAP_SCRIPT, padding: 0 } };
+export function withConnection(settings: ClaudeSettings, tap = TAP_SCRIPT): ClaudeSettings {
+  const next: ClaudeSettings = { ...settings, statusLine: { type: "command", command: tap, padding: 0 } };
   const hooks = { ...(settings.hooks ?? {}) };
   hooks[HOOK_EVENT] = [
     ...(hooks[HOOK_EVENT] ?? []).filter((e) => !isOurs(e)),
@@ -124,7 +160,7 @@ export function withConnection(settings: ClaudeSettings): ClaudeSettings {
 /** Pure: the settings with our status line and hook taken out, and the person's own status line back. */
 export function withoutConnection(settings: ClaudeSettings, original: ClaudeSettings["statusLine"] | null): ClaudeSettings {
   const next: ClaudeSettings = { ...settings };
-  if (next.statusLine?.command?.includes(TAP_SCRIPT)) {
+  if (isTap(next.statusLine?.command)) {
     if (original) next.statusLine = original;
     else delete next.statusLine;
   }
@@ -139,54 +175,90 @@ export function withoutConnection(settings: ClaudeSettings, original: ClaudeSett
   return next;
 }
 
-export async function statusLineState(): Promise<{ statusLine: SetupState["statusLine"]; hooks: boolean }> {
+export async function statusLineState(dir = CLAUDE_DIR): Promise<{ statusLine: SetupState["statusLine"]; hooks: boolean }> {
   try {
-    const s = await readSettings();
+    const s = await readSettings(dir);
     const cmd = s.statusLine?.command ?? null;
-    return { statusLine: !cmd ? "missing" : cmd.includes(TAP_SCRIPT) ? "installed" : "foreign", hooks: hookInstalled(s) };
+    return { statusLine: !cmd ? "missing" : isTap(cmd) ? "installed" : "foreign", hooks: hookInstalled(s) };
   } catch {
     return { statusLine: "missing", hooks: false };
   }
 }
 
-/** The person's default effort level from ~/.claude/settings.json, used until a session reports its own. */
-export async function defaultEffort(): Promise<string | null> {
+/** The person's default effort level from the account's settings.json, used until a session reports its own. */
+export async function defaultEffort(dir = CLAUDE_DIR): Promise<string | null> {
   try {
-    const s = await readSettings();
+    const s = await readSettings(dir);
     return process.env.CLAUDE_CODE_EFFORT_LEVEL ?? (typeof s.effortLevel === "string" ? s.effortLevel : null);
   } catch {
     return null;
   }
 }
 
-export async function installStatusLine(): Promise<{ ok: boolean; message: string }> {
-  const settings = await readSettings();
-  const current = settings.statusLine?.command ?? null;
-  if (current?.includes(TAP_SCRIPT) && hookInstalled(settings)) return { ok: true, message: "Already connected" };
-  const backup = await backupSettings();
-  await mkdir(TAP_DIR, { recursive: true });
-  const wrapped = current && !current.includes(TAP_SCRIPT) ? current : null;
-  if (!current?.includes(TAP_SCRIPT)) {
-    await writeFile(TAP_SCRIPT, tapScript(wrapped));
-    await writeFile(join(BACKUP_DIR, "original-statusline.json"), JSON.stringify(settings.statusLine ?? null) + "\n");
+/** Adds the status line and the permission hook to one account's settings.json, after a backup. */
+async function connectHome(h: Home): Promise<{ changed: boolean; backup: string | null }> {
+  const before = await readSettingsOrNone(h.dir);
+  const current = before.statusLine?.command ?? null;
+  if (isTap(current ?? undefined) && hookInstalled(before)) return { changed: false, backup: null };
+  const backup = await backupSettings(h);
+  if (!isTap(current ?? undefined)) {
+    await writeFile(tapPath(h), tapScript(current));
+    await chmod(tapPath(h), 0o755);
+    await writeFile(join(BACKUP_DIR, backupName(h, "original-statusline.json")), JSON.stringify(before.statusLine ?? null) + "\n");
   }
-  await chmod(TAP_SCRIPT, 0o755);
+  // Re-read right before writing so a change Claude Code just made is not lost.
+  await writeSettings(withConnection(await readSettingsOrNone(h.dir), tapPath(h)), h.dir);
+  return { changed: true, backup };
+}
+
+/** Takes the status line and the hook out of one account's settings.json, and puts the status line it had back. */
+export async function disconnectHome(h: Home): Promise<{ ok: boolean; message: string }> {
+  try {
+    const before = await readSettingsOrNone(h.dir);
+    if (!isTap(before.statusLine?.command) && !hookInstalled(before)) return { ok: true, message: "Not connected" };
+    await backupSettings(h);
+    let original: ClaudeSettings["statusLine"] | null = null;
+    try {
+      original = JSON.parse(await readFile(join(BACKUP_DIR, backupName(h, "original-statusline.json")), "utf8"));
+    } catch {
+      original = null;
+    }
+    await writeSettings(withoutConnection(await readSettingsOrNone(h.dir), original), h.dir);
+    return { ok: true, message: "Disconnected" };
+  } catch (err) {
+    return { ok: false, message: `Could not change ${settingsFile(h.dir)}: ${(err as Error).message}` };
+  }
+}
+
+/** Connects every account. One whose settings.json does not parse is left alone, and the others connect still. */
+export async function installStatusLine(): Promise<{ ok: boolean; message: string }> {
+  await mkdir(TAP_DIR, { recursive: true });
   await writeFile(HOOK_SCRIPT, HOOK_BODY);
   await chmod(HOOK_SCRIPT, 0o755);
-  // Re-read right before writing so a change Claude Code just made is not lost.
-  await writeSettings(withConnection(await readSettings()));
-  return { ok: true, message: `Connected. New sessions report everything; a backup of your settings is at ${backup}` };
+  let backup: string | null = null;
+  let changed = false;
+  const failed: string[] = [];
+  for (const h of homes()) {
+    try {
+      const out = await connectHome(h);
+      changed ||= out.changed;
+      if (!h.account) backup = out.backup;
+    } catch (err) {
+      failed.push(`${settingsFile(h.dir)} (${(err as Error).message})`);
+    }
+  }
+  if (failed.length) return { ok: false, message: `Could not connect ${failed.join(", ")}. Fix it and connect again.` };
+  if (!changed) return { ok: true, message: "Already connected" };
+  return { ok: true, message: `Connected. New sessions report everything${backup ? `; a backup of your settings is at ${backup}` : ""}` };
 }
 
 export async function uninstallStatusLine(): Promise<{ ok: boolean; message: string }> {
-  await backupSettings();
-  let original: ClaudeSettings["statusLine"] | null = null;
-  try {
-    original = JSON.parse(await readFile(join(BACKUP_DIR, "original-statusline.json"), "utf8"));
-  } catch {
-    original = null;
+  const failed: string[] = [];
+  for (const h of homes()) {
+    const out = await disconnectHome(h);
+    if (!out.ok) failed.push(out.message);
   }
-  await writeSettings(withoutConnection(await readSettings(), original));
+  if (failed.length) return { ok: false, message: failed.join(" ") };
   return { ok: true, message: "Disconnected. Your previous status line is back." };
 }
 
@@ -247,29 +319,40 @@ export async function readTap(sessionId: string): Promise<Tap | null> {
   }
 }
 
-/** Plan usage from whichever session reported last; every session shares the account's limits. */
-export async function latestUsage(): Promise<Usage> {
+const NO_USAGE: Usage = { fiveHour: null, sevenDay: null, observedAt: null };
+
+/**
+ * Plan usage for each account, in the order given: from whichever of its sessions reported last, since its sessions
+ * share its limits. A report belongs to the account whose folder holds its conversation.
+ */
+export async function latestUsages(list: Home[] = homes()): Promise<Usage[]> {
   let names: string[] = [];
   try {
     names = (await readdir(TAP_DIR)).filter((n) => n.endsWith(".json"));
   } catch {
-    return { fiveHour: null, sevenDay: null, observedAt: null };
+    return list.map(() => NO_USAGE);
   }
-  let best: { at: number; id: string } | null = null;
+  const files: { at: number; id: string }[] = [];
   for (const n of names) {
     try {
-      const at = (await stat(join(TAP_DIR, n))).mtimeMs;
-      if (!best || at > best.at) best = { at, id: n.slice(0, -5) };
+      files.push({ at: (await stat(join(TAP_DIR, n))).mtimeMs, id: n.slice(0, -5) });
     } catch {
       /* file vanished */
     }
   }
-  if (!best) return { fiveHour: null, sevenDay: null, observedAt: null };
-  const tap = await readTap(best.id);
+  files.sort((a, b) => b.at - a.at);
   const now = Date.now();
   // A window whose reset time passed is stale; Claude Code drops it too.
   const live = (w: RateWindow | null) => (w && w.resetsAt > now ? w : null);
-  return { fiveHour: live(tap?.fiveHour ?? null), sevenDay: live(tap?.sevenDay ?? null), observedAt: best.at };
+  const out = new Map<Home, Usage>();
+  for (const f of files) {
+    if (out.size === list.length) break;
+    const tap = await readTap(f.id);
+    // A report from before Claude Code named the transcript is the usual account's.
+    const home = tap?.transcriptPath ? homeOf(tap.transcriptPath, list) : list[0];
+    if (home && !out.has(home)) out.set(home, { fiveHour: live(tap?.fiveHour ?? null), sevenDay: live(tap?.sevenDay ?? null), observedAt: f.at });
+  }
+  return list.map((h) => out.get(h) ?? NO_USAGE);
 }
 
 export interface PermissionAsk {
