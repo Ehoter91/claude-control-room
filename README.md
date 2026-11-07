@@ -330,18 +330,26 @@ Then run **Developer: Restart Extension Host** in VS Code. Your terminals keep r
 
 <br>
 
+Press `⌘/` or `?` to see them all in the app. Hover a button to see its shortcut. The `⌘` ones follow PyCharm and work while you type in a console too.
+
 | Key | Action |
 |---|---|
-| `1` – `9` | Select a tile |
-| `←` `→` | Move between tiles |
-| `N` | Start a new session |
-| `T` | Open a terminal |
+| `⌘N` or `N` | Start a new session |
+| `⌘T` or `T` | Open a terminal |
+| `⌘,` | Settings |
+| `⌘/` or `?` | Keyboard shortcuts |
+| `⌘⇧]` `⌘⇧[`, `⌃⇥` `⌃⇧⇥`, or `→` `←` | Next or previous session |
+| `↑` `↓` | The session above or below |
+| `Home` / `End` | The first or last session |
+| `⌘1` – `⌘9` or `1` – `9` | Go to that session |
 | `↵` | Open the selected session: its console, or its IDE |
+| `⇧Esc` | Leave the console, so the single keys work again |
 | `Space` | Show or hide its details |
+| `⇧F6` or `F2` | Rename it |
 | `A` / `R` | Approve or reject |
 | `P` | Open its pull request |
 | `X` | Close the session |
-| `F` | Switch to Focus |
+| `F` | Switch between Focus and Fit |
 | `Esc` | Close panels |
 
 Keys typed right after the window gets focus are ignored. So typing meant for another app cannot approve anything.

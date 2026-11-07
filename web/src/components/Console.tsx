@@ -5,6 +5,7 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { AArrowDown, AArrowUp, ChevronDown, Maximize2, Minimize2, Minus, PictureInPicture2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { commandOf } from "../lib/keys.ts";
 import { api, type ConsoleView, remember, stored } from "../store.ts";
 
 const THEME = {
@@ -162,8 +163,10 @@ export default function Console({ name, autoFocus = false, onFocused, title, vie
       void pump();
     };
     term.onData(send);
-    // Shift+Enter starts a new line in the prompt, the way Option+Enter does in Claude Code.
+    // The app's own shortcuts pass by the console to the app. Shift+Enter starts a new line in the prompt, the way
+    // Option+Enter does in Claude Code.
     term.attachCustomKeyEventHandler((e) => {
+      if (commandOf(e)) return false;
       if (e.key !== "Enter" || !e.shiftKey) return true;
       if (e.type === "keydown") send("\x1b\r");
       return false;

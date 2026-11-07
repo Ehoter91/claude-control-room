@@ -22,6 +22,7 @@ import type { PullRequest, Session } from "../../../shared/types.ts";
 import { duration } from "../lib/format.ts";
 import { popoutSession } from "../lib/native.ts";
 import { act, api, openMenu, openSession, setState, useOpenName, useStore } from "../store.ts";
+import { withKey } from "../lib/keys.ts";
 import { IconButton, Ring, StatusOrb, useNow } from "./Primitives.tsx";
 import { TuneChips } from "./Tuning.tsx";
 
@@ -45,7 +46,7 @@ export function PrChip({ pr }: { pr: PullRequest }) {
     <button
       type="button"
       className={`chip chip-pr pr-${state}`}
-      data-tip={`${pr.title}${review ? ` · ${review}` : ""}${pr.checks !== "none" ? ` · checks ${pr.checks}` : ""}`}
+      data-tip={withKey(`${pr.title}${review ? ` · ${review}` : ""}${pr.checks !== "none" ? ` · checks ${pr.checks}` : ""}`, "pr")}
       onClick={(e) => {
         e.stopPropagation();
         openUrl(pr.url);
@@ -139,6 +140,7 @@ export function ApprovalCard({ s }: { s: Session }) {
           type="button"
           className="btn btn-approve"
           disabled={!reachable || busy[`${s.pid}:approve`]}
+          data-tip={withKey("Approve", "approve")}
           onClick={() => void act(`${s.pid}:approve`, `/api/sessions/${s.pid}/approve`)}
         >
           <Check size={15} /> Approve
@@ -147,6 +149,7 @@ export function ApprovalCard({ s }: { s: Session }) {
           type="button"
           className="btn btn-ghost"
           disabled={!reachable || busy[`${s.pid}:reject`]}
+          data-tip={withKey("Reject", "reject")}
           onClick={() => void act(`${s.pid}:reject`, `/api/sessions/${s.pid}/reject`)}
         >
           Reject
@@ -247,7 +250,7 @@ export function RenameButton({ s, onClick }: { s: Session; onClick: () => void }
   const needsHelper = s.ide === "vscode" && !s.vscodeLinked;
   const label = s.vscodeLinked ? "Rename (its VS Code tab too)" : needsHelper ? "Rename needs the VS Code helper (Settings)" : "Rename";
   return (
-    <IconButton label={label} disabled={needsHelper} onClick={onClick}>
+    <IconButton label={label} keys={needsHelper ? undefined : "rename"} disabled={needsHelper} onClick={onClick}>
       <Pencil size={14} />
     </IconButton>
   );
@@ -311,7 +314,8 @@ export function Monitor({ s, index, selected }: { s: Session; index: number; sel
   const detail = settled ? ((s.nameSource !== "summary" ? s.summary.now : null) ?? a.detail) : a.detail;
   const words = lastWords(s);
   const asking = a.kind === "approval" || a.kind === "question";
-  const [renaming, setRenaming] = useState(false);
+  // Details that show this session take the rename; the tile behind them does not.
+  const renaming = useStore((st) => st.renaming === s.pid && st.drawer !== s.pid);
   const openIn = useOpenName(s);
   const menuOn = useStore((st) => st.menu?.pid === s.pid);
   return (
@@ -329,11 +333,11 @@ export function Monitor({ s, index, selected }: { s: Session; index: number; sel
     >
       <div className="mon-screen" aria-hidden />
       <header className="mon-head">
-        <span className="mon-key" data-tip={index < 9 ? `Press ${index + 1} to select` : undefined}>{index + 1}</span>
-        {renaming ? <NameEditor s={s} className="mon-title" onDone={() => setRenaming(false)} /> : <h3 className="mon-title">{s.name}</h3>}
+        <span className="mon-key" data-tip={index < 9 ? `Press ${index + 1} or ⌘${index + 1} to select` : undefined}>{index + 1}</span>
+        {renaming ? <NameEditor s={s} className="mon-title" onDone={() => setState({ renaming: null })} /> : <h3 className="mon-title">{s.name}</h3>}
         <div className="mon-actions">
-          <RenameButton s={s} onClick={() => setRenaming(true)} />
-          <IconButton label={`Open in ${openIn}`} onClick={() => openSession(s)}>
+          <RenameButton s={s} onClick={() => setState({ renaming: s.pid })} />
+          <IconButton label={`Open in ${openIn}`} keys="open" onClick={() => openSession(s)}>
             <CodeXml size={15} />
           </IconButton>
           <IconButton label="Pop out to its own window" onClick={() => popoutSession(s.pid)}>
@@ -341,7 +345,7 @@ export function Monitor({ s, index, selected }: { s: Session; index: number; sel
           </IconButton>
         </div>
         <RemoteButton s={s} />
-        <IconButton label="Close session…" tone="danger" onClick={() => setState({ closing: s.pid })}>
+        <IconButton label="Close session…" keys="close" tone="danger" onClick={() => setState({ closing: s.pid })}>
           <X size={15} />
         </IconButton>
       </header>

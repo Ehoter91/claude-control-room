@@ -1,5 +1,6 @@
 import { useSyncExternalStore, type ReactNode } from "react";
 import type { StatusKind } from "../../../shared/types.ts";
+import { type KeyId, withKey } from "../lib/keys.ts";
 
 let now = Date.now();
 const nowListeners = new Set<() => void>();
@@ -35,13 +36,14 @@ export function IconButton(props: {
   disabled?: boolean;
   tone?: "default" | "danger";
   tipSide?: "top" | "bottom" | "left";
+  keys?: KeyId; // its shortcut, shown in the tip
 }) {
   return (
     <button
       type="button"
       className={`icon-btn ${props.active ? "is-active" : ""} ${props.tone === "danger" ? "is-danger" : ""}`}
       aria-label={props.label}
-      data-tip={props.label}
+      data-tip={props.keys ? withKey(props.label, props.keys) : props.label}
       data-tip-side={props.tipSide ?? "bottom"}
       disabled={props.disabled}
       onClick={(e) => {

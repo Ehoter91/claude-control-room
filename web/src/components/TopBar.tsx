@@ -1,7 +1,8 @@
-import { Bell, BellOff, ChevronDown, ChevronUp, Plus, Settings, SquareTerminal, Volume2, VolumeX, X } from "lucide-react";
+import { Bell, BellOff, ChevronDown, ChevronUp, Keyboard, Plus, Settings, SquareTerminal, Volume2, VolumeX, X } from "lucide-react";
 import { useState } from "react";
 import type { Snapshot } from "../../../shared/types.ts";
 import { playChime } from "../lib/alerts.ts";
+import { withKey } from "../lib/keys.ts";
 import { native } from "../lib/native.ts";
 import { act, api, openTerminal, remember, setState, useStore, VIEW } from "../store.ts";
 import { IconButton } from "./Primitives.tsx";
@@ -90,16 +91,21 @@ export function TopBar({ snap }: { snap: Snapshot | null }) {
         </IconButton>
         {snap && !VIEW.wallOnly && VIEW.sessionPid === null && <UpdatePill snap={snap} />}
         {cfg && !VIEW.wallOnly && VIEW.sessionPid === null && (
-          <button type="button" className="btn btn-ghost btn-sm btn-terminal" data-tip={`New terminal here, in ${cfg.terminalFolder} (T)`} data-tip-side="bottom" onClick={() => void openTerminal()}>
+          <button type="button" className="btn btn-ghost btn-sm btn-terminal" data-tip={withKey(`New terminal here, in ${cfg.terminalFolder}`, "newTerminal")} data-tip-side="bottom" onClick={() => void openTerminal()}>
             <SquareTerminal size={14} /> Terminal
           </button>
         )}
         {cfg && !VIEW.wallOnly && VIEW.sessionPid === null && (
-          <button type="button" className="btn btn-primary btn-sm topbar-new" data-tip="Start Claude Code in a folder (N)" data-tip-side="bottom" onClick={() => setState({ panel: "new" })}>
+          <button type="button" className="btn btn-primary btn-sm topbar-new" data-tip={withKey("Start Claude Code in a folder", "newSession")} data-tip-side="bottom" onClick={() => setState({ panel: "new" })}>
             <Plus size={14} /> New session
           </button>
         )}
-        <IconButton label="Settings" onClick={() => setState({ panel: "settings" })}>
+        {!VIEW.wallOnly && (
+          <IconButton label="Keyboard shortcuts" keys="help" onClick={() => setState({ panel: "keys" })}>
+            <Keyboard size={16} />
+          </IconButton>
+        )}
+        <IconButton label="Settings" keys="settings" onClick={() => setState({ panel: "settings" })}>
           <Settings size={16} />
         </IconButton>
       </div>

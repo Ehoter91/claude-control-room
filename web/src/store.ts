@@ -4,7 +4,7 @@ import { ideName, openTarget, targetName } from "../../shared/ides.ts";
 import type { ActionResult, Session, Snapshot, StatusKind } from "../../shared/types.ts";
 
 export type Filter = "all" | "attention" | "working" | "idle" | "inactive";
-export type Panel = "settings" | "worktrees" | "new" | null;
+export type Panel = "settings" | "worktrees" | "new" | "keys" | null;
 
 export interface Toast {
   id: number;
@@ -28,6 +28,7 @@ export interface State {
   drawerWidths: Record<string, number>; // dragged widths of the details panel, with a console and without one
   consoleHeight: number | null; // dragged height of a console in its details; null fills the room
   menu: { pid: number; x: number; y: number } | null; // a session's right-click menu, where it opened
+  renaming: number | null; // pid whose name is being edited, in its details when they show, else on its tile
 }
 
 /** How a session's console shows: in its details, folded to its bar, or filling the window. */
@@ -73,6 +74,7 @@ let state: State = {
   drawerWidths: stored<Record<string, number>>("cr.drawerWidths", {}),
   consoleHeight: stored<number | null>("cr.consoleHeight", null),
   menu: null,
+  renaming: null,
 };
 const listeners = new Set<() => void>();
 
