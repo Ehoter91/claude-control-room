@@ -71,7 +71,7 @@ describe("transcript", () => {
     expect(s.workedFolders).toEqual([`${homedir()}/code/shield-26900`, "/code/shield-27100", "/code/other repo"]);
   });
 
-  it("finds branch work from before the stretch it reads first", async () => {
+  it("finds branch work and published pages from before the stretch it reads first", async () => {
     const file = join(mkdtempSync(join(tmpdir(), "cr-tx-")), "s.jsonl");
     const chat = (i: number) => line({ type: "assistant", cwd: "/code/shield", message: { content: [{ type: "text", text: `step ${i} ${"x".repeat(30_000)}` }] } });
     writeFileSync(
@@ -79,6 +79,7 @@ describe("transcript", () => {
       [
         line({ type: "user", cwd: "/code/shield", gitBranch: "26012_shared", message: { content: "<bash-input>cd ../shield-26900 && git push</bash-input>" } }),
         line({ type: "assistant", cwd: "/code/shield", gitBranch: "27001_mine", message: { content: [{ type: "tool_use", id: "a", name: "Bash", input: { command: "git commit -am fix" } }] } }),
+        line({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "p", content: "Published" }] }, toolUseResult: { url: "https://claude.ai/artifact/Early1", artifact_id: "x", title: "Early page" } }),
         ...Array.from({ length: 150 }, (_, i) => chat(i)),
       ].join("\n") + "\n",
     );
@@ -86,6 +87,7 @@ describe("transcript", () => {
     expect(s?.chat.some((c) => c.text.startsWith("! cd"))).toBe(false); // outside what it read
     expect(s?.workedFolders).toEqual(["/code/shield-26900"]);
     expect(s?.workedBranches).toEqual(["27001_mine"]);
+    expect(s?.artifacts).toEqual([{ url: "https://claude.ai/artifact/Early1", title: "Early page" }]);
   });
 
   it("tracks titles, PR links, effort, model and unanswered tool calls", () => {
@@ -109,6 +111,24 @@ describe("transcript", () => {
 
     applyLines(s, [line({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: "ok" }] } })]);
     expect(s.pending).toEqual([]);
+  });
+
+  it("lists the pages it published with the Artifact tool, the latest last, and not ones it only read", () => {
+    const s = emptyState("/x.jsonl");
+    const published = (url: string, title: string) => ({ url, path: "/tmp/page.html", artifact_id: "58d63899-21b9-4d26-9cd6-e6b4c47ca713", title, updated: true });
+    const result = (toolUseResult: unknown) => line({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "a", content: "Published" }] }, toolUseResult });
+    applyLines(s, [
+      result(published("https://claude.ai/artifact/AAA111", "Grooming prep")),
+      result(published("https://claude.ai/code/artifact/0b9e-42", "Triage")),
+      result({ read: "<html>", artifactRead: true, owned: true }),
+      result(published("javascript:alert(1)", "Not a page")),
+      line({ type: "user", isSidechain: true, message: { content: [] }, toolUseResult: published("https://claude.ai/artifact/SUB", "A subagent's") }),
+      result(published("https://claude.ai/artifact/AAA111", "Grooming prep, v2")),
+    ]);
+    expect(s.artifacts).toEqual([
+      { url: "https://claude.ai/code/artifact/0b9e-42", title: "Triage" },
+      { url: "https://claude.ai/artifact/AAA111", title: "Grooming prep, v2" },
+    ]);
   });
 
   it("knows when you last sent a message, and not when a tool answered", () => {
@@ -491,6 +511,11 @@ describe("other Claude accounts", () => {
     expect(cleanSettings({}).defaultAccountLabel).toBe("Default");
     expect(cleanSettings({ defaultAccountLabel: "  Work  " }).defaultAccountLabel).toBe("Work");
     expect(cleanSettings({ defaultAccountLabel: "   " }).defaultAccountLabel).toBe("Default");
+    // New sessions start on the usual account, unless Settings names another one that is still there.
+    expect(cleanSettings({}).newSessionAccount).toBe("");
+    const personal = { label: "Personal", dir: "/opt/claude-personal" };
+    expect(cleanSettings({ accounts: [personal], newSessionAccount: personal.dir }).newSessionAccount).toBe(personal.dir);
+    expect(cleanSettings({ accounts: [], newSessionAccount: personal.dir }).newSessionAccount).toBe("");
   });
 
   it("knows the account of a file by the folder it lies in", () => {

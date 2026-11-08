@@ -1,5 +1,6 @@
 // A session's menu, on a right-click on its tile or row: what its details offer, without opening them.
 import {
+  AppWindow,
   ArrowDownToLine,
   ArrowUpToLine,
   Check,
@@ -279,6 +280,9 @@ function Menu({ s, x, y }: { s: Session; x: number; y: number }) {
         )}
         {s.pr && <Item icon={<GitPullRequest size={14} />} label={`Open PR #${s.pr.number}`} keys="pr" onClick={run(() => openUrl(s.pr!.url))} />}
         {s.story && <Item icon={<SquareKanban size={14} />} label="Open story" meta={`sc-${s.storyId}`} onClick={run(() => openUrl(s.story!.url))} />}
+        {s.artifacts[0] && (
+          <Item icon={<AppWindow size={14} />} label="Open artifact" tip={s.artifacts[0].title ?? undefined} onClick={run(() => openUrl(s.artifacts[0].url))} />
+        )}
         <Item icon={<FolderOpen size={14} />} label="Show folder in Finder" keys="finder" onClick={run(() => showInFinder(s))} />
         {!s.hosted && tmuxReady && (
           <Item

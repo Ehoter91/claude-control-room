@@ -27,6 +27,7 @@ interface Seed {
   changes?: [dirty: number, insertions: number, deletions: number, ahead: number];
   pr?: Pick<PullRequest, "number" | "title" | "state" | "isDraft" | "review" | "checks"> & { checked?: [number, number, number] };
   story?: Pick<Story, "id" | "name" | "state">;
+  artifact?: string; // the title of a page it published on claude.ai
   claim?: string[]; // paths the session claimed in the repo's worktree registry
   remote?: boolean; // on Remote Control, so it is in the Claude app too
   personal?: boolean; // on the second Claude account
@@ -70,6 +71,7 @@ const SEEDS: Seed[] = [
     ],
     changes: [2, 48, 12, 1],
     story: { id: 2481, name: "Checkout test fails 1 run in 10", state: "In Progress" },
+    artifact: "Checkout test: 50 runs",
     model: "claude-opus-5-5",
     effort: "high",
     context: 38,
@@ -406,6 +408,7 @@ function sessionOf(s: Seed, now: number): Session {
     pr: prOf(s, now),
     story: s.story ? { ...s.story, url: `https://app.shortcut.com/acme/story/${s.story.id}`, type: "feature", owners: ["you"] } : null,
     storyId: s.story?.id ?? null,
+    artifacts: s.artifact ? [{ url: "https://claude.ai/artifact/CheckoutRuns50", title: s.artifact }] : [],
     claims,
     model: modelName(s.model),
     modelId: s.model,
@@ -482,6 +485,7 @@ export function demoSnapshot(now: number, count = DEMO_DEFAULT_COUNT): Snapshot 
       shortcutTokens: ["••••8c2f"],
       accounts: [PERSONAL],
       defaultAccountLabel: "Work",
+      newSessionAccount: "",
     },
   };
 }

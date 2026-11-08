@@ -1,4 +1,4 @@
-import { ArrowDownToLine, CodeXml, FolderOpen, GitPullRequest, PictureInPicture2, SquareKanban, X } from "lucide-react";
+import { AppWindow, ArrowDownToLine, CodeXml, FolderOpen, GitPullRequest, PictureInPicture2, SquareKanban, X } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ideName } from "../../../shared/ides.ts";
 import type { ChatLine, Session } from "../../../shared/types.ts";
@@ -244,6 +244,11 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
           <SquareKanban size={15} /> Story
         </button>
       )}
+      {s.artifacts[0] && (
+        <button type="button" className="btn btn-ghost" data-tip={s.artifacts[0].title ?? "The page it published"} onClick={() => openUrl(s.artifacts[0].url)}>
+          <AppWindow size={15} /> Artifact
+        </button>
+      )}
       <button type="button" className="btn btn-ghost btn-icon" data-tip="Show the folder in Finder" aria-label="Folder" onClick={() => void api("/api/open", { folder: g?.root ?? s.cwd })}>
         <FolderOpen size={15} />
       </button>
@@ -324,6 +329,18 @@ export function SessionDetail({ s, variant }: { s: Session; variant: "drawer" | 
             <Row label="Story">
               <span className="mono">sc-{s.storyId}</span> {s.story ? <span>{s.story.name}</span> : <span className="muted">(add a Shortcut token in Settings)</span>}
               {s.story?.state && <span className="chip-state"> {s.story.state}</span>}
+            </Row>
+          )}
+          {s.artifacts.length > 0 && (
+            <Row label={s.artifacts.length === 1 ? "Artifact" : "Artifacts"}>
+              {s.artifacts.map((p, i) => (
+                <span key={p.url}>
+                  {i > 0 && ", "}
+                  <button type="button" className="link" onClick={() => openUrl(p.url)}>
+                    {p.title ?? "Untitled"}
+                  </button>
+                </span>
+              ))}
             </Row>
           )}
           {s.claims.length > 0 && (

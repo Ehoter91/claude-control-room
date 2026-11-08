@@ -1,6 +1,6 @@
 import { open, stat } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { ChatLine, QuestionPreview, ToolPreview } from "../shared/types.ts";
+import type { ArtifactLink, ChatLine, QuestionPreview, ToolPreview } from "../shared/types.ts";
 import { HOME } from "./paths.ts";
 
 export interface ToolUse {
@@ -21,6 +21,7 @@ export interface TranscriptState {
   lastPrompt: string | null;
   lastPromptAt: number | null; // when you last sent the session a message
   prLink: { number: number; url: string; repo: string } | null;
+  artifacts: ArtifactLink[]; // pages it published on claude.ai, the latest last
   worktreePath: string | null;
   worktreeBranch: string | null;
   workedBranches: string[]; // branches this session made, committed to, pushed or opened a PR from
@@ -54,6 +55,7 @@ export function emptyState(path: string): TranscriptState {
     lastPrompt: null,
     lastPromptAt: null,
     prLink: null,
+    artifacts: [],
     worktreePath: null,
     worktreeBranch: null,
     workedBranches: [],
@@ -124,7 +126,8 @@ async function firstRead(state: TranscriptState, size: number): Promise<void> {
     state.offset = start + begin;
     return;
   }
-  // Branch work from before that stretch still says whose PR is whose; it comes first, as it happened first.
+  // Branch work from before that stretch still says whose PR is whose, and a page published then is still its page.
+  // They come first, as they happened first.
   if (start + begin > 0) await branchWorkBefore(state, start + begin);
   applyLines(state, buf.subarray(begin, end).toString("utf8").split("\n"));
   state.offset = start + end + 1;
@@ -164,6 +167,10 @@ async function branchWorkBefore(state: TranscriptState, end: number): Promise<vo
     const nl = buf.lastIndexOf(0x0a);
     carry = buf.subarray(nl + 1);
     for (const raw of buf.subarray(0, nl + 1).toString("utf8").split("\n")) {
+      if (raw.includes('"artifact_id"')) {
+        const e = parse(raw);
+        if (e?.type === "user" && !e.isSidechain) noteArtifact(state, e.toolUseResult);
+      }
       if (!(raw.includes("<bash-input>") || raw.includes('"name":"Bash"')) || !(BRANCH_WORK.test(raw) || raw.search(BRANCH_MADE) >= 0)) continue;
       const e = parse(raw);
       if (!e || e.isMeta) continue;
@@ -322,7 +329,18 @@ function noteBranchWork(state: TranscriptState, command: string, branch: unknown
   }
 }
 
+const ARTIFACT_URL = /^https:\/\/claude\.ai\/(?:code\/)?artifact\/[\w-]+$/;
+
+/** A publish by the Artifact tool, whose result names the page. Reads and uploads name no artifact_id and url both. */
+function noteArtifact(state: TranscriptState, result: unknown): void {
+  const r = result as Record<string, unknown> | null;
+  if (!r || typeof r.artifact_id !== "string" || typeof r.url !== "string" || !ARTIFACT_URL.test(r.url)) return;
+  const page = { url: r.url, title: typeof r.title === "string" && r.title ? r.title : null };
+  state.artifacts = [...state.artifacts.filter((a) => a.url !== page.url), page].slice(-10);
+}
+
 function applyUser(state: TranscriptState, e: Entry): void {
+  noteArtifact(state, e.toolUseResult);
   const content = e.message?.content;
   if (Array.isArray(content)) {
     for (const block of content) {
