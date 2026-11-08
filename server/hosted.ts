@@ -3,7 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { basename, isAbsolute, join } from "node:path";
 import { isEffort, isMode, isModel } from "../shared/claude.ts";
 import { isHostedName } from "../shared/hosted.ts";
 import type { AccountRef, ActionResult } from "../shared/types.ts";
@@ -134,12 +134,21 @@ async function writeConf(): Promise<void> {
   if (current !== CONF_TEXT) await writeFile(CONF, CONF_TEXT);
 }
 
+/**
+ * How a terminal starts your shell. zsh writes its history only when it exits, and a terminal here can run for days:
+ * shared, each command goes to ~/.zsh_history as it runs and the other terminals find it with ⌃R. A setopt in
+ * ~/.zshrc still has the last word.
+ */
+export function shellArgs(shell: string): string[] {
+  return basename(shell) === "zsh" ? [shell, "-l", "-o", "SHARE_HISTORY"] : [shell, "-l"];
+}
+
 /** Starts a terminal: your shell in a new tmux session, the way a Terminal window starts it. */
 export async function startShell(cwd: string, shell = process.env.SHELL || "/bin/zsh"): Promise<ActionResult & { name?: string }> {
   if (!tmuxReady()) return { ok: false, message: "Control Room needs tmux for this. Install it: brew install tmux" };
   await writeConf();
   const name = `crt-${randomBytes(4).toString("hex")}`;
-  const started = await tmux(["-f", CONF, "-u", "new-session", "-d", "-s", name, "-c", cwd, "-x", "120", "-y", "36", shell, "-l"], 10_000);
+  const started = await tmux(["-f", CONF, "-u", "new-session", "-d", "-s", name, "-c", cwd, "-x", "120", "-y", "36", ...shellArgs(shell)], 10_000);
   if (!started.ok) return { ok: false, message: (started.stderr || started.stdout).trim() || "tmux did not start the terminal." };
   return { ok: true, message: "Started", name };
 }

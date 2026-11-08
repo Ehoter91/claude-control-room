@@ -51,6 +51,11 @@ describe("hosted sessions", () => {
     expect(hosted.sessionEnv({ PATH: "/bin", CLAUDE_CONFIG_DIR: "/elsewhere" }).CLAUDE_CONFIG_DIR).toBeUndefined();
   });
 
+  it("starts zsh with its history shared, so a terminal that runs for days still saves what it ran", () => {
+    expect(hosted.shellArgs("/bin/zsh")).toEqual(["/bin/zsh", "-l", "-o", "SHARE_HISTORY"]);
+    expect(hosted.shellArgs("/opt/homebrew/bin/bash")).toEqual(["/opt/homebrew/bin/bash", "-l"]);
+  });
+
   it("starts Claude Code without the variables of whoever started Control Room", () => {
     const env = hosted.sessionEnv({ PATH: "/bin", CLAUDECODE: "1", CLAUDE_CODE_ENTRYPOINT: "cli", ELECTRON_RUN_AS_NODE: "1", npm_lifecycle_event: "app", TMUX: "x", HOME: "/h" });
     expect(env).toMatchObject({ PATH: "/bin", HOME: "/h", COLORTERM: "truecolor", LANG: "en_US.UTF-8" });
