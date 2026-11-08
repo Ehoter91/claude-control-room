@@ -71,6 +71,7 @@ export function AccountsSection({ snap }: { snap: Snapshot }) {
   // Left empty, the usual account is "Default" again; another one keeps its name.
   const renameUsual = (label: string) => void act("account-name", "/api/settings", { defaultAccountLabel: label }, true);
   const rename = (a: OtherAccount, label: string) => label && void act(`account:${a.dir}`, "/api/settings", { renameAccount: { dir: a.dir, label } }, true);
+  const startOn = (dir: string) => void act("account-new", "/api/settings", { newSessionAccount: dir }, true);
 
   return (
     <>
@@ -137,6 +138,24 @@ export function AccountsSection({ snap }: { snap: Snapshot }) {
           )}
         </div>
       </div>
+      {others.length > 0 && (
+        <div className="set-line">
+          <div className="set-text">
+            <b>New sessions start on</b>
+            <span>The account New session picks each time. You can still pick another one there, for that session.</span>
+          </div>
+          <div className="set-control">
+            <select className="select" aria-label="New sessions start on" value={snap.settings.newSessionAccount} onChange={(e) => startOn(e.target.value)}>
+              <option value="">{snap.settings.defaultAccountLabel}</option>
+              {others.map((a) => (
+                <option key={a.dir} value={a.dir}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
     </>
   );
 }

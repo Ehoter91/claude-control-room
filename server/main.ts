@@ -296,6 +296,12 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
           if (!settings().accounts.some((a) => a.dir === b.renameAccount!.dir)) return send(res, 200, { ok: false, message: "That account is not in Settings any more." });
           patch.accounts = settings().accounts.map((a) => (a.dir === b.renameAccount!.dir ? { ...a, label } : a));
         }
+        if (typeof b.newSessionAccount === "string") {
+          if (b.newSessionAccount && !settings().accounts.some((a) => a.dir === b.newSessionAccount)) {
+            return send(res, 200, { ok: false, message: "That account is not in Settings any more." });
+          }
+          patch.newSessionAccount = b.newSessionAccount;
+        }
         if (typeof b.removeAccount === "string") {
           const gone = settings().accounts.find((a) => a.dir === b.removeAccount);
           // Its sessions would vanish from here, and those started here would run on with no way to reach them.
@@ -307,6 +313,8 @@ export async function startServer(opts: { port?: number; dev?: boolean; installU
             if (!out.ok) return send(res, 200, out);
           }
           patch.accounts = settings().accounts.filter((a) => a.dir !== b.removeAccount);
+          // New sessions go back to the usual account.
+          if (settings().newSessionAccount === b.removeAccount) patch.newSessionAccount = "";
         }
         await saveSettings(patch);
         await monitor.tick();

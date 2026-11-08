@@ -79,6 +79,12 @@ export interface Story {
   owners: string[];
 }
 
+/** A page the session published on claude.ai with Claude Code's Artifact tool. */
+export interface ArtifactLink {
+  url: string;
+  title: string | null;
+}
+
 export interface Claim {
   repo: string; // main worktree of the repo whose registry holds the claim
   worktree: string;
@@ -122,6 +128,7 @@ export interface Session {
   pr: PullRequest | null;
   story: Story | null;
   storyId: number | null;
+  artifacts: ArtifactLink[]; // pages it published, the latest first
   claims: Claim[];
   model: string | null; // display name, e.g. "Opus 5.5"
   modelId: string | null; // e.g. "claude-opus-5-5[1m]"
@@ -198,6 +205,7 @@ export interface Settings {
   shortcutTokens: string[]; // masked when sent to the UI
   accounts: AccountRef[]; // Claude accounts besides the one in ~/.claude
   defaultAccountLabel: string; // the name of that one here: "Default" until you give it another, such as "Work"
+  newSessionAccount: string; // the folder of the account New session starts on: "" for the one in ~/.claude
 }
 
 export interface Snapshot {

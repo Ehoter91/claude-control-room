@@ -144,7 +144,7 @@ Keep a personal account next to your work one. Claude Code keeps each login in i
 Add one in **Settings → Claude accounts**: a name, such as Personal, and a folder, such as `~/.claude-personal`. Click **Sign in** and pick the account.
 The sign-in opens in a private window (Chrome, Brave, Edge or Firefox, the first one you have), so your browser's own claude.ai stays signed in to your work account.
 
-**New session** then asks which account to use. A session on another account has its name in pink on the tile, in Focus and in its details.
+**New session** then asks which account to use. It starts on the default one each time, or on the one set in **Settings → Claude accounts → New sessions start on**. A session on another account has its name in pink on the tile, in Focus and in its details.
 To see one account's sessions, pick it next to the filters above the wall, or click its count in the Sessions card. **Default** is every session that is not on another account.
 Sessions you start yourself show up too: `CLAUDE_CONFIG_DIR=~/.claude-personal claude`.
 The usage card shows each account's limits, once **Connect Claude Code** has added the status line to that account as well.
@@ -172,6 +172,7 @@ A tab you never named shows only the program's name, like `claude`. Then the til
       <ul>
         <li>what the session works on, and what it does right now;</li>
         <li>its branch, changes, pull request and story;</li>
+        <li>the pages it published on claude.ai with the Artifact tool, and an <b>Artifact</b> button that opens the latest one;</li>
         <li>the model, effort, context size and cost;</li>
         <li>the live conversation.</li>
       </ul>

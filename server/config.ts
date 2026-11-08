@@ -19,6 +19,7 @@ export const DEFAULT_SETTINGS: Settings = {
   shortcutTokens: [],
   accounts: [],
   defaultAccountLabel: "Default",
+  newSessionAccount: "",
 };
 
 let current: Settings = { ...DEFAULT_SETTINGS };
@@ -29,6 +30,7 @@ export function cleanSettings(raw: Partial<Settings>): Settings {
   if (!isIdeId(s.ide)) s.ide = DEFAULT_SETTINGS.ide;
   s.accounts = cleanAccounts(s.accounts);
   s.defaultAccountLabel = accountLabel(s.defaultAccountLabel) ?? DEFAULT_SETTINGS.defaultAccountLabel;
+  if (!s.accounts.some((a) => a.dir === s.newSessionAccount)) s.newSessionAccount = "";
   return s;
 }
 

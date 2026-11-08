@@ -24,10 +24,11 @@ export function NewSessionDialog({ snap }: { snap: Snapshot }) {
   // Empty means Claude Code's own default. The last choice is kept for next time.
   const [tune, setTune] = useState(() => stored("cr.newSessionTune", { model: "", effort: "", mode: DEFAULT_MODE }));
   const setTuned = (part: Partial<typeof tune>) => setTune((t) => ({ ...t, ...part }));
-  // The config folder of another account, or "" for the usual one; the last choice is kept while that account is.
+  // The config folder of another account, or "" for the usual one. Each time the one from Settings, not the last choice:
+  // one session on a personal account must not put the next ones there too.
   const [account, setAccount] = useState(() => {
-    const last = stored("cr.newSessionAccount", "");
-    return snap.otherAccounts.some((a) => a.dir === last) ? last : "";
+    const first = snap.settings.newSessionAccount;
+    return snap.otherAccounts.some((a) => a.dir === first) ? first : "";
   });
   const chosen = snap.otherAccounts.find((a) => a.dir === account) ?? null;
   const [starting, setStarting] = useState(false);
@@ -72,7 +73,6 @@ export function NewSessionDialog({ snap }: { snap: Snapshot }) {
     setStarting(false);
     if (!r.ok) return toast(r.message, "error");
     remember("cr.newSessionTune", tune);
-    remember("cr.newSessionAccount", account);
     remember("cr.recentFolders", [cwd.trim(), ...stored<string[]>("cr.recentFolders", []).filter((f) => f !== cwd.trim())].slice(0, 8));
     if (r.pid) setState({ panel: null, drawer: r.pid, selected: r.pid, typeInto: r.pid });
     else if (r.name) setWaiting(r.name);
